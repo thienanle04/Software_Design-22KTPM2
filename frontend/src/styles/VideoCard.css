@@ -1,0 +1,10 @@
+.ellipsis {
+    display: -webkit-box;          /* For flexbox layout */
+    -webkit-box-orient: vertical;  /* Stacks text vertically */
+    -webkit-line-clamp: 3;         /* Number of lines to show (change to your preference) */
+    line-clamp: 3;                 /* Standard property for compatibility */
+    overflow: hidden;              /* Hides the overflow text */
+    text-overflow: ellipsis;       /* Adds "..." at the end of the text */
+    white-space: normal;           /* Allows text to wrap */
+  }
+  
