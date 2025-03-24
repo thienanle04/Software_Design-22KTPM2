@@ -20,7 +20,7 @@
 }
 
 .form-button {
-  width: 95%;
+  width: 90%;
   padding: 10px;
   margin: 20px 0;
   background-color: #007bff;
@@ -33,4 +33,14 @@
 
 .form-button:hover {
   background-color: #0056b3;
+}
+
+.navigate-link {
+  color: #007bff; /* Color of the link */
+  text-decoration: none; /* Removes the underline */
+}
+
+.navigate-link:hover {
+  color: #0056b3; /* Change color on hover */
+  text-decoration: none; /* Ensure there's no underline on hover */
 }
