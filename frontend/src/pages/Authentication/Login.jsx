@@ -1,8 +1,6 @@
 import { useNavigate, Link } from "react-router-dom";
 import { useState } from "react";
 import "/src/styles/Form.css";
-import { login } from "/src/services/authService";
-import { ACCESS_TOKEN, REFRESH_TOKEN } from "/src/config/constants";
 import { Button, TextField, Box } from '@mui/material';
 import { useAuth } from "/src/context/AuthContext";
 import Alert from '@mui/material/Alert';
@@ -12,7 +10,7 @@ function Login() {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
-    const { setIsAuthenticated } = useAuth();
+    const { login } = useAuth();
     const navigate = useNavigate();
 
     const name = "Login";
@@ -22,12 +20,7 @@ function Login() {
         e.preventDefault();
 
         try {
-            const res = await login({ username, password });
-            if (res.status === 200) {
-                localStorage.setItem(ACCESS_TOKEN, res.data.access);
-                localStorage.setItem(REFRESH_TOKEN, res.data.refresh);
-                setIsAuthenticated(true);
-            }
+            const data = await login({ username, password });
             navigate("/")
         } catch (error) {
             console.log(error);

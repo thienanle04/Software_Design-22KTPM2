@@ -1,14 +1,15 @@
 import { useNavigate, Link } from "react-router-dom";
 import { useState } from "react";
 import "/src/styles/Form.css";
-import { register} from "/src/services/authService";
 import LoadingIndicator from "/src/components/ui/LoadingIndicator";
 import { Button, TextField } from '@mui/material';
+import { useAuth } from "/src/context/AuthContext";
 
 function Register() {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
+    const { register } = useAuth();
     const navigate = useNavigate();
 
     const name = "Register";
@@ -18,10 +19,8 @@ function Register() {
         e.preventDefault();
 
         try {
-            const res = await register({ username, password });
-            if (res.status === 201) {
-                navigate("/login")
-            }
+            const data = await register({ username, password });
+            navigate("/login")
         } catch (error) {
             console.log(error);
             alert(error);
