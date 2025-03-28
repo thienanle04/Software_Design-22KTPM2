@@ -21,7 +21,7 @@ function Login() {
 
         try {
             const data = await login({ username, password });
-            navigate("/")
+            navigate("/dashboard");
         } catch (error) {
             console.log(error);
             alert(error);

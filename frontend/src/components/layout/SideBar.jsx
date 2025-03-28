@@ -2,10 +2,12 @@ import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Layout, Menu, theme, Button } from "antd";
 import {
-  DashboardOutlined,
-  UserOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined,
+  VideoCameraAddOutlined,
+  PictureOutlined,
+  HomeOutlined,
+  DashboardOutlined,
+  VideoCameraOutlined,
 } from "@ant-design/icons";
 import Logo from "/src/components/ui/Logo";
 
@@ -13,34 +15,47 @@ const { Sider } = Layout;
 
 const menuList = [
   {
-    key: "dashboard",
-    icon: <DashboardOutlined />,
-    label: "Dashboard",
-    link: "/",
-    children: [
-      {
-        key: "/",
-        label: "My Projects",
-        link: <Link to="/">My Projects</Link>,
-      },
-      {
-        key: "/analysis",
-        label: "Analysis",
-        link: <Link to="/analysis">Analysis</Link>,
-      },
-    ],
+    key: "/dashboard",
+    label: "Home",
+    icon: <HomeOutlined />,
   },
   {
-    key: "profile",
-    icon: <UserOutlined />,
-    label: "Profile",
-    link: <Link to="/profile">Profile</Link>,
+    key: "/dashboard/analysis",
+    label: "Analysis",
+    icon: <DashboardOutlined />,
+  },
+  {
+    type: "divider",
+  },
+  {
+    key: "/dashboard/tools",
+    type: "group",
+    label: "Tools",
   },
 ];
+
+const tools = [
+  {
+    link: "/dashboard/tools?tool=text-to-image",
+    label: "Text To Image",
+    icon: <PictureOutlined />,
+  },
+  {
+    link: "/dashboard/tools?tool=image-to-video",
+    label: "Image To Video",
+    icon: <VideoCameraOutlined />,
+  },
+  {
+    link: "/dashboard/tools?tool=text-to-video",
+    label: "Text To Video",
+    icon: <VideoCameraAddOutlined />,
+  }
+]
 
 function SideBar() {
   const location = useLocation();
   const currentPath = location.pathname;
+
   const navigate = useNavigate();
 
   const {
@@ -78,6 +93,7 @@ function SideBar() {
         background: colorBgContainer,
         transition: "width 0.5s ease",
         icon: <MenuFoldOutlined />,
+        zIndex: 1,
       }}
       breakpoint="md"
       collapsedWidth="0"
@@ -96,11 +112,24 @@ function SideBar() {
       <Menu
         onSelect={({ key }) => navigate(key)}
         mode="inline"
-        defaultSelectedKeys={[currentPath]}
+        selectedKeys={[currentPath]}
         defaultOpenKeys={["dashboard"]}
         style={{ height: "wrap-content", borderRight: 0 }}
         items={menuList}
       />
+
+      {tools.map((tool) => (
+        <Button
+          type="text"
+          icon={tool.icon}
+          block
+          onClick={() => navigate(tool.link)}
+          style={{ margin: "4px", padding: "0px 16px 0px 24px", justifyContent: "start", height: "40px", width: "96%" }}
+          key={tool.link}
+        >
+          {tool.label}
+        </Button>
+      ))}
 
       {isMobile && (
         <Button

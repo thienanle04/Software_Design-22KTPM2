@@ -21,8 +21,7 @@ const AppLayout = () => {
 
       <Layout>
         <Header style={{ background: colorBgContainer, padding: 24}}>
-          <Flex align="center" style={{ height: "100%" }} gap="8px">
-            <TopNav />
+          <Flex align="center" style={{ height: "100%" }} gap="8px" justify="end">
             <Button icon={<SearchOutlined />} shape="circle" onClick={() => console.log("Search clicked")}/>
             <Avatar icon={<UserOutlined />} style={{ backgroundColor: "#1890ff", alignSelf: "center" }}/>
             <Typography.Text strong>thienanle04</Typography.Text>
