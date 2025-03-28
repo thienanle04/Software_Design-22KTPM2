@@ -2,13 +2,13 @@ from django.db import models
 from apps.image_video_generation.models import Video
 
 class Voice(models.Model):
-    video = models.ForeignKey(Video, related_name="voices", on_delete=models.CASCADE)
-    voice_type = models.CharField(max_length=50, choices=[('ai', 'AI'), ('human', 'Human')])
-    voice_service = models.CharField(max_length=50, choices=[('google', 'Google TTS'), ('amazon', 'Amazon Polly'), ('elevenlabs', 'Eleven Labs')])
+    provider = models.CharField(max_length=50)
     language = models.CharField(max_length=50)
-    speed = models.FloatField(default=1.0)  # Tốc độ đọc
-    tone = models.FloatField(default=1.0)  # Âm điệu
-    preview_url = models.URLField(null=True, blank=True)  # Link nghe thử
+    voice_type = models.CharField(max_length=50)
 
-    def __str__(self):
-        return f"Voice for {self.video.title}"
+class GeneratedVoice(models.Model):
+    voice = models.ForeignKey(Voice, on_delete=models.CASCADE)
+    audio_url = models.URLField()
+    speed = models.FloatField()
+    pitch = models.FloatField()
+    created_at = models.DateTimeField(auto_now_add=True)
