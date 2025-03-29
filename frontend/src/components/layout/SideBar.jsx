@@ -35,18 +35,19 @@ const menuList = [
 ];
 
 const tools = [
-  {
-    link: "/dashboard/tools?tool=text-to-image",
-    label: "Text To Image",
-    icon: <PictureOutlined />,
-  },
+  // {
+  //   link: "/dashboard/tools?tool=text-to-image",
+  //   label: "Text To Image",
+  //   icon: <PictureOutlined />,
+  // },
   {
     link: "/dashboard/tools?tool=image-to-video",
     label: "Image To Video",
-    icon: <VideoCameraOutlined />,
+    // icon: <VideoCameraOutlined />,
+    icon: <PictureOutlined />,
   },
   {
-    link: "/dashboard/tools?tool=text-to-video",
+    link: "/dashboard/tools/text-to-video",
     label: "Text To Video",
     icon: <VideoCameraAddOutlined />,
   }

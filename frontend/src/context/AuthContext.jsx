@@ -97,7 +97,6 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem(ACCESS_TOKEN);
     localStorage.removeItem(REFRESH_TOKEN);
     setIsAuthenticated(false);
-    navigate("/login");
     return;
   };
 
