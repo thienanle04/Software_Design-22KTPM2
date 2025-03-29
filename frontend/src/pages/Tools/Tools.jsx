@@ -4,8 +4,6 @@ import ImageToVideo from "/src/pages/ImageToVideo/ImageToVideo";
 
 const toolComponentMap = {
   "image-to-video": ImageToVideo,
-//   "text-to-image": TextToImage,
-//   "text-to-video": TextToVideo,
 };
 
 function Tools() {
@@ -26,10 +24,13 @@ function Tools() {
 
   return (
     <>
-      {ToolComponent ? <ToolComponent /> : <div style={{ padding: 24 }}>Please select a tool.</div>}
+      {ToolComponent ? (
+        <ToolComponent />
+      ) : (
+        <></>
+      )}
     </>
   );
-
 }
 
 export default Tools;

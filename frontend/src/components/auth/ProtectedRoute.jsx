@@ -12,7 +12,7 @@ function ProtectedRoute() {
         return <div>Loading...</div>;
     }
 
-    return isAuthenticated ? <Outlet/> : <Navigate to="/login" />;
+    return isAuthenticated ? <Outlet/> : <Navigate to="/dashboard/login" />;
 }
 
 export default ProtectedRoute;
