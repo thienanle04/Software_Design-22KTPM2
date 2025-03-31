@@ -5,4 +5,5 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/auth/", include("apps.authentication.urls")),
+    path('api/image-video/', include('apps.image_video_generation.urls')),
 ]

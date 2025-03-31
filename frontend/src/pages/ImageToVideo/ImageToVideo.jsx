@@ -8,6 +8,7 @@ import {
   Typography,
   Divider,
   Upload,
+  message,
 } from "antd";
 import { UploadOutlined } from "@ant-design/icons";
 
@@ -17,8 +18,12 @@ const { Title, Paragraph } = Typography;
 function ImageToVideo() {
   const [fileList, setFileList] = useState([]);
   const navigate = useNavigate();
+
   const [mode, setMode] = useState("Upload Image");
   const [prompt, setPrompt] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState(null); // Store the generated image
+
 
   const onClose = () => {
     // Close the popup and go back to /dashboard
@@ -37,6 +42,39 @@ function ImageToVideo() {
 
   // Handle file changes
   const handleChange = ({ fileList }) => setFileList(fileList);
+
+  // Handle image generation request
+  const handleGenerateImage = async () => {
+    if (!prompt) {
+      message.error("Please enter a prompt.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/image-video/generate-image/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ prompt }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.image_data) {
+        setGeneratedImage(`data:image/png;base64,${data.image_data}`);
+      } else {
+        message.error(data.error || "Image generation failed.");
+      }
+    } catch (error) {
+      console.error("Error generating image:", error);
+      message.error("Failed to connect to the API.");
+    }
+
+    setLoading(false);
+  };
 
   return (
     <>
@@ -68,18 +106,37 @@ function ImageToVideo() {
           />
 
           {mode === "Generate Image" ? (
-            <TextArea
-              placeholder="Try something like “A cat flying in the sky wearing superman suit”"
-              autoSize={{ minRows: 3, maxRows: 5 }}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              style={{ background: "#f5f5f5", marginBottom: 8 }}
-              suffix={
-                <Button type="primary" style={{ background: "#8e44ff" }}>
-                  Generate
-                </Button>
-              }
-            />
+            <>
+              <TextArea
+                placeholder="Try something like 'A cat flying in the sky wearing a Superman suit'"
+                autoSize={{ minRows: 3, maxRows: 5 }}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                style={{ background: "#f5f5f5", marginBottom: 8 }}
+              />
+              <Button
+                type="primary"
+                style={{ background: "#8e44ff", marginBottom: 16 }}
+                onClick={handleGenerateImage}
+                loading={loading}
+              >
+                Generate
+              </Button>
+
+              {generatedImage && (
+                <div style={{ textAlign: "center", marginTop: 16 }}>
+                  <img
+                    src={generatedImage}
+                    alt="Generated"
+                    style={{
+                      maxWidth: "100%",
+                      borderRadius: "8px",
+                      boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
+                    }}
+                  />
+                </div>
+              )}
+            </>
           ) : (
             <Upload.Dragger
               name="file"
