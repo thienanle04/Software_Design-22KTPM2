@@ -5,8 +5,8 @@ import logging
 from io import BytesIO
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from google import generativeai
-from google.generativeai import types
+from google import genai
+from google.genai import types
 from PIL import Image
 from django.conf import settings
 
