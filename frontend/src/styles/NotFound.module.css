@@ -1,0 +1,140 @@
+/* NotFound.module.css */
+
+@import url('https://fonts.googleapis.com/css2?family=Inconsolata:wght@700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+
+.container {
+  font-family: 'Inconsolata', monospace;
+  font-size: 62.5%;
+  padding: 0 7.7rem;
+}
+
+.home {
+  padding-top: 6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5rem;
+}
+
+.image {
+  flex: 1;
+  max-width: 50%;
+}
+
+.image img {
+  width: 100%;
+  height: auto;
+}
+
+.content {
+  flex: 1;
+  max-width: 50%;
+}
+
+.content h1 {
+  font-family: 'Space Mono', monospace;
+  font-size: 3.2rem;  /* Reduced size for better readability */
+  font-weight: 700;
+  line-height: 4.8rem;
+  letter-spacing: -0.035em;
+  padding-bottom: 1rem;
+  color: #333333;
+}
+
+.content p {
+  font-size: 1.6rem;  /* Adjusted for smaller screens */
+  font-family: 'Space Mono', monospace;
+  line-height: 2.5rem;
+  letter-spacing: -0.035em;
+  padding-bottom: 5rem;
+  max-width: 50rem;
+  color: #4F4F4F;
+}
+
+.btn {
+  padding: 1.5rem 2.5rem;
+  background-color: #333333;
+  color: #fff;
+  font-family: 'Space Mono', monospace;
+  font-weight: bold;
+  font-size: 1.2rem;
+  line-height: 1.8rem;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+  transition: 0.2s;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn:hover {
+  background-color: #4F4F4F;
+}
+
+footer {
+  text-align: center;
+  padding: 2rem;
+  font-size: 1rem;
+}
+
+/* Responsive media queries */
+@media (max-width: 991px) {
+  .container {
+    font-size: 55%;
+    padding: 0 2rem;
+  }
+
+  .home {
+    gap: 2rem;  /* Reduced gap between image and content on smaller screens */
+    flex-direction: column;  /* Stack image and content vertically */
+  }
+
+  .image, .content {
+    max-width: 100%;  /* Full width for both on small screens */
+  }
+}
+
+@media (max-width: 768px) {
+  .content h1 {
+    font-size: 2.4rem;
+    line-height: 3.6rem;
+    padding-bottom: 2rem;
+  }
+
+  .content p {
+    font-size: 1.4rem;
+    line-height: 2.1rem;
+  }
+
+  .btn {
+    font-size: 1.1rem;
+    padding: 1.2rem 2.2rem;  /* Reduced button size */
+  }
+}
+
+@media (max-width: 450px) {
+  .container {
+    font-size: 50%;
+    padding: 0 1.5rem;
+  }
+
+  .content h1 {
+    font-size: 2rem;
+    line-height: 3rem;
+  }
+
+  .content p {
+    font-size: 1.4rem;
+    line-height: 2rem;
+  }
+
+  .btn {
+    margin-bottom: 5rem;
+    font-size: 1rem;
+    padding: 1rem 2rem;
+  }
+
+  section {
+    padding: 0 1.5rem;
+  }
+}

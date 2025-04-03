@@ -2,10 +2,14 @@ from django.db import models
 from apps.image_video_generation.models import Video
 
 class Script(models.Model):
-    video = models.ForeignKey(Video, related_name="scripts", on_delete=models.CASCADE)
+    title = models.CharField(max_length=200)
     content = models.TextField()
-    is_approved = models.BooleanField(default=False)
-    last_edited = models.DateTimeField(auto_now=True)
+    style = models.CharField(max_length=50, choices=[('simple', 'Simple'), ('detailed', 'Detailed')])
+    created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f"Script for {self.video.title}"
+class ScriptVersion(models.Model):
+    script = models.ForeignKey(Script, on_delete=models.CASCADE)
+    version_content = models.TextField()
+    version_number = models.IntegerField()
+    modified_at = models.DateTimeField(auto_now=True)
+

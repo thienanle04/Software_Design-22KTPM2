@@ -34,29 +34,34 @@ class ContentProcessor:
         Returns:
             str: Câu chuyện đã được chuyển thể hoặc thông báo lỗi
         """
-        final_content = content  # Khởi tạo với content trực tiếp
+        # Đảm bảo content ban đầu là chuỗi
+        final_content = str(content) if content else ""
         
         # Xử lý file nếu có
         if file_path:
             file_content = ""
             try:
-                if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
-                    img = Image.open(file_path)
-                    file_content = pytesseract.image_to_string(img, lang='vie')
-                elif file_path.lower().endswith(('.txt', '.doc', '.docx', '.pdf')):
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        file_content = f.read()
+                if isinstance(file_path, str):  # Kiểm tra có phải chuỗi không
+                    if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        img = Image.open(file_path)
+                        file_content = pytesseract.image_to_string(img, lang='vie')
+                    elif file_path.lower().endswith(('.txt', '.doc', '.docx', '.pdf')):
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            file_content = f.read()
+                    else:
+                        return "[Lỗi] Định dạng file không hỗ trợ (.png/.jpg/.txt/.doc/.pdf)"
+                    
+                    # Kết hợp nội dung và đảm bảo là chuỗi
+                    file_content = str(file_content)
+                    final_content = f"{final_content}\n\nNội dung từ file:\n{file_content}" if final_content else file_content
                 else:
-                    return "[Lỗi] Định dạng file không hỗ trợ (.png/.jpg/.txt/.doc/.pdf)"
-                
-                # Kết hợp nội dung
-                final_content = f"{content}\n\nNội dung từ file:\n{file_content}" if content else file_content
+                    return "[Lỗi] Đường dẫn file phải là chuỗi"
                 
             except Exception as e:
                 return f"[Lỗi đọc file] {str(e)}"
         
-        # Kiểm tra nội dung cuối cùng
-        if not final_content.strip():
+        # Kiểm tra nội dung cuối cùng (sau khi đã đảm bảo là chuỗi)
+        if not str(final_content).strip():
             return "[Lỗi] Không có nội dung khoa học đầu vào"
 
         # Tạo prompt
@@ -79,6 +84,6 @@ class ContentProcessor:
         try:
             model = genai.GenerativeModel('gemini-1.5-pro-latest')
             response = model.generate_content(prompt)
-            return response.text
+            return str(response.text)  # Đảm bảo kết quả trả về là chuỗi
         except Exception as e:
             return f"[Lỗi AI] {str(e)}"
