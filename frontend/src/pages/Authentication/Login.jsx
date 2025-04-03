@@ -1,79 +1,82 @@
-import { useNavigate, Link } from "react-router-dom";
-import { useState } from "react";
-import "/src/styles/Form.css";
-import { login } from "/src/services/authService";
-import { ACCESS_TOKEN, REFRESH_TOKEN } from "/src/config/constants";
-import { Button, TextField, Box } from '@mui/material';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Modal, Button, Input, Typography, Divider, notification } from "antd";
 import { useAuth } from "/src/context/AuthContext";
-import Alert from '@mui/material/Alert';
-import LoadingIndicator from "/src/components/ui/LoadingIndicator";
+
+const { Title, Paragraph } = Typography;
 
 function Login() {
-    const [username, setUsername] = useState("");
-    const [password, setPassword] = useState("");
-    const [loading, setLoading] = useState(false);
-    const { setIsAuthenticated } = useAuth();
-    const navigate = useNavigate();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [api, contextHolder] = notification.useNotification();
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
-    const name = "Login";
+  const openNotification = () => {
+    api['success']({
+      message: "Login Successful",
+      description:
+        "You have successfully logged in to your account.",
+      showProgress: true,
+      pauseOnHover: false,
+    });
+  };
 
-    const handleSubmit = async (e) => {
-        setLoading(true);
-        e.preventDefault();
+  const handleSubmit = async (e) => {
+    setLoading(true);
+    e.preventDefault();
 
-        try {
-            const res = await login({ username, password });
-            if (res.status === 200) {
-                localStorage.setItem(ACCESS_TOKEN, res.data.access);
-                localStorage.setItem(REFRESH_TOKEN, res.data.refresh);
-                setIsAuthenticated(true);
-            }
-            navigate("/")
-        } catch (error) {
-            console.log(error);
-            alert(error);
-        } finally {
-            setLoading(false)
-        }
-    };
+    try {
+      const data = await login({ username, password });
+      openNotification();
+      navigate("/dashboard");
+    } catch (error) {
+      console.log(error);
+      alert(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return (
-        <form onSubmit={handleSubmit} className="form-container">
-            <h1>{name}</h1>
-            <TextField
-                label="Username"
-                variant="outlined"
-                className="form-input"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Username"
-                sx = {{marginBottom: 2}}
-            />
-            <TextField
-                label="Password"
-                variant="outlined"
-                className="form-input"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                sx = {{marginBottom: 2}}
-            />
-            <Button variant="contained" color="primary" type="submit" className="form-button">
-                {name}
-            </Button>
-            <div className="form-footer">
-                <p>
-                    Don't have an account?{" "}
-                    <Link to="/register" className="navigate-link">
-                        Sign up
-                    </Link>
-                </p>
-            </div>
-            {loading && <LoadingIndicator />}
-        </form>
-    );
+  const onClose = () => {
+    navigate("/dashboard"); // Close the modal and navigate back to dashboard or other route
+  };
+
+  return (
+    <>
+      {contextHolder}
+      <Modal open={true} onCancel={onClose} footer={[]}>
+        <Title level={4}>Login</Title>
+        <Paragraph>
+          Please enter your credentials to login to your account.
+        </Paragraph>
+
+        <Input
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Username"
+          style={{ marginBottom: 8 }}
+        />
+        <Input.Password
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+        />
+
+        <Divider />
+        <Button block type="primary" onClick={handleSubmit}>
+          Login
+        </Button>
+
+        <div style={{ justifySelf: "center" }}>
+          <p>
+            Don't have an account? <a href="/dashboard/register">Sign up</a>
+          </p>
+        </div>
+      </Modal>
+    </>
+  );
 }
 
 export default Login;
