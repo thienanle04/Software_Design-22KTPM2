@@ -6,3 +6,6 @@ djangorestframework-simplejwt
 PyJWT
 pytz
 python-dotenv
+Pillow
+google.genai
+requests
