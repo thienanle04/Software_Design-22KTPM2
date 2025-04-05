@@ -6,3 +6,8 @@ djangorestframework-simplejwt
 PyJWT
 pytz
 python-dotenv
+
+pytesseract 
+beautifulsoup4
+python-docx 
+pymupdf
