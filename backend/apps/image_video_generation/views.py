@@ -102,7 +102,7 @@ def generate_video_from_image(request):
 
     try:
         # Get prompt and image from the POST request
-        prompt = request.POST.get('prompt', 'a man waving his hand')
+        prompt = request.POST.get('prompt', 'Animate this image')
         image_file = request.FILES.get('image')
 
         if not image_file:
