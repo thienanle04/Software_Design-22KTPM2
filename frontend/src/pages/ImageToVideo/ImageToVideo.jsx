@@ -198,7 +198,13 @@ function ImageToVideo() {
               </Button>
 
               {generatedImage && (
-                <div style={{ textAlign: "center", marginTop: 16 }}>
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  marginTop: 24,
+                }}>
+                  
                   <img
                     src={generatedImage}
                     alt="Generated"
@@ -278,7 +284,12 @@ function ImageToVideo() {
             </Button>
 
           {generatedVideo && (
-            <div style={{ textAlign: "center", marginTop: 16 }}>
+            <div style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              marginTop: 24,
+            }}>
               <video
                 src={generatedVideo}
                 controls
