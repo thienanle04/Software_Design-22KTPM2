@@ -9,6 +9,8 @@ import {
   Divider,
   Empty,
   Segmented,
+  message,
+  Spin,
 } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -22,6 +24,8 @@ const TextToVideo = () => {
   const [tab, setTab] = useState("My Creations");
   const location = useLocation();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false); // Loading state for API call
+  const [generatedVideo, setGeneratedVideo] = useState(null); // Generated video data
 
   useEffect(() => {
     if (location.state && location.state.prompt) {
@@ -33,13 +37,47 @@ const TextToVideo = () => {
     setPrompt(e.target.value);
   };
 
-  const handleGenerate = () => {
-    if (prompt.trim()) {
-      navigate("/dashboard/tools/text-to-video", { state: { prompt } });
+ // Handle video save/download
+ const handleSaveVideo = () => {
+  if (!generatedVideo) return;
+  const link = document.createElement("a");
+  link.href = generatedVideo;
+  link.download = "generated_video.mp4";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  message.success("Video download started!");
+};
+
+// Handle video generation
+const handleGenerate = async () => {
+  if (!prompt.trim()) {
+    message.error("Please enter a prompt.");
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const response = await fetch("http://127.0.0.1:8000/api/image-video/generate-video-from-text/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prompt }),
+    });
+
+    const data = await response.json();
+    if (response.ok && data.video_base64) {
+      setGeneratedVideo(`data:video/mp4;base64,${data.video_base64}`);
     } else {
-      // Show error message
+      message.error(data.error || "Video generation failed.");
     }
-  };
+  } catch (error) {
+    console.error("Video generation error:", error);
+    message.error("Failed to generate video.");
+  }
+  setLoading(false);
+};
 
   return (
     <div style={{ background: "#ebebec" }}>
@@ -103,7 +141,39 @@ const TextToVideo = () => {
           minHeight: "calc(100vh - 64px - 24px)",
         }}
       >
-        <Empty description="No videos yet" />
+        {loading ? (
+  <Spin tip="Generating video..." />
+) : generatedVideo ? (
+  <div
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      marginTop: 24,
+    }}
+  >
+    <video
+      src={generatedVideo}
+      controls
+      style={{
+        maxWidth: "100%",
+        width: "600px",
+        borderRadius: "8px",
+        boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
+      }}
+    />
+    <Button
+      type="default"
+      style={{ marginTop: 12 }}
+      onClick={handleSaveVideo}
+    >
+      Save Video
+    </Button>
+  </div>
+) : (
+  <Empty description="No videos yet" />
+)}
+
       </Flex>
 
       {/* Video Generation Controls Section */}
