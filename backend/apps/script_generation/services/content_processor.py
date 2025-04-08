@@ -16,15 +16,15 @@ class ContentProcessor:
 
     def generate_simplified_explanation(self, content, audience="children", file_paths: list[str] = None):
         """
-        Dùng Gemini để tạo giải thích đơn giản và dễ hiểu cho đối tượng người đọc cụ thể.
+        Use Gemini to generate a simplified and easy-to-understand explanation tailored for a specific audience.
 
         Args:
-            content (str): Nội dung khoa học cần giải thích
-            audience (str): Đối tượng người đọc (mặc định: trẻ em)
-            file_paths (list[str]): Danh sách đường dẫn file bổ sung (.txt, .png, .jpg, .pdf, .docx)
+            content (str): Scientific content to explain
+            audience (str): Target audience (default: children)
+            file_paths (list[str]): List of additional file paths (.txt, .png, .jpg, .pdf, .docx)
 
         Returns:
-            str: Giải thích đơn giản hóa dưới dạng văn bản
+            str: Simplified explanation as text
         """
         from PIL import Image
         import pytesseract
@@ -38,55 +38,52 @@ class ContentProcessor:
             for path in file_paths:
                 try:
                     if not isinstance(path, str):
-                        return f"[Lỗi] Đường dẫn file không hợp lệ: {path}"
+                        return f"[Error] Invalid file path: {path}"
 
                     if path.lower().endswith(('.png', '.jpg', '.jpeg')):
                         img = Image.open(path)
-                        text = pytesseract.image_to_string(img, lang='vie')
-                        file_content += f"\n\n[Nội dung từ ảnh {path}]:\n{text}"
+                        text = pytesseract.image_to_string(img, lang='eng')
+                        file_content += f"\n\n[Text extracted from image {path}]:\n{text}"
 
                     elif path.lower().endswith('.txt'):
                         with open(path, 'r', encoding='utf-8') as f:
                             text = f.read()
-                            file_content += f"\n\n[Nội dung từ file .txt {path}]:\n{text}"
+                            file_content += f"\n\n[Text from .txt file {path}]:\n{text}"
 
                     elif path.lower().endswith('.pdf'):
                         doc = fitz.open(path)
-                        text = ""
-                        for page in doc:
-                            text += page.get_text()
-                        file_content += f"\n\n[Nội dung từ PDF {path}]:\n{text}"
+                        text = "".join(page.get_text() for page in doc)
+                        file_content += f"\n\n[Text from PDF file {path}]:\n{text}"
 
                     elif path.lower().endswith('.docx'):
-                        doc = docx.Document(path)
-                        text = "\n".join(p.text for p in doc.paragraphs)
-                        file_content += f"\n\n[Nội dung từ DOCX {path}]:\n{text}"
+                        document = docx.Document(path)
+                        text = "\n".join(paragraph.text for paragraph in document.paragraphs)
+                        file_content += f"\n\n[Text from DOCX file {path}]:\n{text}"
 
                     else:
-                        file_content += f"\n\n[⚠️ Bỏ qua file không hỗ trợ: {path}]"
+                        file_content += f"\n\n[⚠️ Skipping unsupported file: {path}]"
 
                 except Exception as e:
-                    return f"[Lỗi khi xử lý file {path}]: {str(e)}"
+                    return f"[Error processing file {path}]: {str(e)}"
 
             if file_content:
                 full_content = f"{full_content}\n\n{file_content}" if full_content else file_content
 
         if not str(full_content).strip():
-            return "[Lỗi] Không có nội dung đầu vào để giải thích."
+            return "[Error] No input content to explain."
 
-        # Prompt chuyên nghiệp
         prompt = f"""
-    Bạn là một chuyên gia truyền đạt kiến thức khoa học. Hãy giải thích nội dung dưới đây sao cho phù hợp với đối tượng là **{audience}**.
+    You are a science communication expert. Please explain the content below in a way that is suitable for an audience of **{audience}**.
 
-    --- NỘI DUNG CẦN GIẢI THÍCH ---
+    --- CONTENT TO EXPLAIN ---
     {full_content}
 
-    --- YÊU CẦU ---
-    - Dùng ngôn ngữ rõ ràng, dễ hiểu, gần gũi với {audience}
-    - Tránh dùng từ ngữ chuyên môn hoặc giải thích trừu tượng
-    - Nếu có thể, hãy sử dụng ví dụ, ẩn dụ hoặc hình ảnh minh họa để giúp {audience} dễ hình dung
+    --- REQUIREMENTS ---
+    - Use clear, simple, and relatable language for {audience}
+    - Avoid technical terms or abstract explanations
+    - If possible, use examples, metaphors, or visual imagery to help {audience} understand more easily
 
-    Hãy trình bày một cách sinh động và dễ tiếp cận nhất.
+    Present the explanation in the most vivid and accessible way possible.
     """
 
         try:
@@ -94,25 +91,21 @@ class ContentProcessor:
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
-            return f"[Lỗi AI] {str(e)}"
+            return f"[AI Error] {str(e)}"
 
-            
-            return response.text  # Trả về văn bản kết quả
-
-    def transform_to_story(content="", style="sinh động", genre="phiêu lưu", file_paths: list[str] = None):
+    def transform_to_story(content="", style="vivid", genre="adventure", file_paths: list[str] = None):
         """
-        Biến nội dung khoa học thành truyện (nhận input từ cả text trực tiếp và danh sách file)
+        Convert scientific content into a story (from direct text input and file list)
 
         Args:
-            content (str): Nội dung khoa học trực tiếp (mặc định: rỗng)
-            style (str): Phong cách viết truyện
-            genre (str): Thể loại truyện
-            file_paths (list[str]): Danh sách đường dẫn file (image/text) chứa nội dung bổ sung
+            content (str): Direct scientific content (default: empty)
+            style (str): Storytelling style
+            genre (str): Story genre
+            file_paths (list[str]): List of file paths (image/text) with additional content
 
         Returns:
-            str: Câu chuyện đã được chuyển thể hoặc thông báo lỗi
+            str: Transformed story or error message
         """
-        # Đảm bảo content ban đầu là chuỗi
         final_content = str(content) if content else ""
         file_content = ""
 
@@ -120,57 +113,51 @@ class ContentProcessor:
             for path in file_paths:
                 try:
                     if not isinstance(path, str):
-                        return f"[Lỗi] Đường dẫn file không hợp lệ: {path}"
-                    
+                        return f"[Error] Invalid file path: {path}"
+
                     if path.lower().endswith('.txt'):
                         with open(path, 'r', encoding='utf-8') as f:
                             text = f.read()
-                            file_content += f"\n\n[Nội dung từ file TXT {path}]:\n{text}"
+                            file_content += f"\n\n[Text from TXT file {path}]:\n{text}"
 
                     elif path.lower().endswith('.docx'):
                         import docx
                         doc = docx.Document(path)
-                        text = "\n".join(p.text for p in doc.paragraphs)
-                        file_content += f"\n\n[Nội dung từ file DOCX {path}]:\n{text}"
+                        text = "\n".join(paragraph.text for paragraph in doc.paragraphs)
+                        file_content += f"\n\n[Text from DOCX file {path}]:\n{text}"
 
                     elif path.lower().endswith('.pdf'):
-                        import fitz  # PyMuPDF
+                        import fitz
                         doc = fitz.open(path)
-                        text = ""
-                        for page in doc:
-                            text += page.get_text()
-                        file_content += f"\n\n[Nội dung từ PDF {path}]:\n{text}"
+                        text = "".join(page.get_text() for page in doc)
+                        file_content += f"\n\n[Text from PDF file {path}]:\n{text}"
 
                     elif path.lower().endswith('.doc'):
-                        # Optional: xử lý bằng textract hoặc thông báo chưa hỗ trợ
-                        file_content += f"\n\n[⚠️ Bỏ qua file .doc (chưa hỗ trợ tốt): {path}]"
+                        file_content += f"\n\n[⚠️ Skipping unsupported .doc file: {path}]"
 
                 except Exception as e:
-                    return f"[Lỗi đọc file {path}] {str(e)}"
+                    return f"[File read error {path}] {str(e)}"
 
-            # Gộp nội dung file vào final_content
             if file_content:
                 final_content = f"{final_content}\n\n{file_content}" if final_content else file_content
 
-        # Kiểm tra nội dung cuối cùng
         if not str(final_content).strip():
-            return "[Lỗi] Không có nội dung khoa học đầu vào"
+            return "[Error] No scientific content provided."
 
-        # Tạo prompt
         prompt = f"""
-    Hãy biến nội dung khoa học sau thành một câu chuyện {style} thuộc thể loại {genre}:
+    Please turn the following scientific content into a {style} story in the {genre} genre:
 
-    --- NỘI DUNG GỐC ---
+    --- ORIGINAL CONTENT ---
     {final_content}
 
-    --- YÊU CẦU ---
-    1. PHẦN TRUYỆN (80%):
-    - Nhân vật sử dụng kiến thức khoa học để giải quyết vấn đề
-    - Có hội thoại tự nhiên, không diễn giải lý thuyết khô khan
+    --- REQUIREMENTS ---
+    1. STORY PART (80%):
+    - Characters use scientific knowledge to solve a problem
+    - Include natural dialogue, avoid dry theory
 
-    2. PHẦN GIẢI THÍCH (20%):
-    - Đặt tiêu đề "BẢN CHẤT KHOA HỌC"
-    - Giải thích bằng ẩn dụ/so sánh dễ hiểu
+    2. EXPLANATION PART (20%):
+    - Use the heading "THE SCIENCE BEHIND"
+    - Explain the science using metaphors or easy-to-understand comparisons
     """
 
         try:
@@ -178,4 +165,5 @@ class ContentProcessor:
             response = model.generate_content(prompt)
             return str(response.text)
         except Exception as e:
-            return f"[Lỗi AI] {str(e)}"
+            return f"[AI Error] {str(e)}"
+
