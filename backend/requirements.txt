@@ -11,3 +11,6 @@ pytesseract
 beautifulsoup4
 python-docx 
 pymupdf
+Pillow
+google.genai
+requests
