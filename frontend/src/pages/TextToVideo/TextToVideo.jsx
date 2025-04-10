@@ -49,34 +49,113 @@ const TextToVideo = () => {
   message.success("Video download started!");
 };
 
-// Handle video generation
+// // Handle video generation
+// const handleGenerate = async () => {
+//   if (!prompt.trim()) {
+//     message.error("Please enter a prompt.");
+//     return;
+//   }
+
+//   setLoading(true);
+//   try {
+//     const response = await fetch("http://127.0.0.1:8000/api/image-video/generate-video-from-text/", {
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "application/json",
+//       },
+//       body: JSON.stringify({ prompt }),
+//     });
+
+//     const data = await response.json();
+//     if (response.ok && data.video_base64) {
+//       setGeneratedVideo(`data:video/mp4;base64,${data.video_base64}`);
+//     } else {
+//       message.error(data.error || "Video generation failed.");
+//     }
+//   } catch (error) {
+//     console.error("Video generation error:", error);
+//     message.error("Failed to generate video.");
+//   }
+//   setLoading(false);
+// };
+
+
+// Convert base64 to File object
+const base64ToFile = (base64String, filename) => {
+  const byteString = atob(base64String);
+  const arrayBuffer = new ArrayBuffer(byteString.length);
+  const uint8Array = new Uint8Array(arrayBuffer);
+  for (let i = 0; i < byteString.length; i++) {
+    uint8Array[i] = byteString.charCodeAt(i);
+  }
+  const blob = new Blob([arrayBuffer], { type: "image/png" });
+  return new File([blob], filename, { type: "image/png" });
+};
+
+// Handle video generation by calling two APIs
 const handleGenerate = async () => {
+  console.log("handleGenerate called with prompt:", prompt);
   if (!prompt.trim()) {
     message.error("Please enter a prompt.");
     return;
   }
 
   setLoading(true);
+
   try {
-    const response = await fetch("http://127.0.0.1:8000/api/image-video/generate-video-from-text/", {
+    // Step 1: Generate images from the prompt
+    const imageResponse = await fetch("http://127.0.0.1:8000/api/image-video/generate-images/", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({
+        story: prompt,
+        style: "realistic",
+        resolution: "1024x1024",
+        aspect_ratio: "16:9",
+      }),
     });
 
-    const data = await response.json();
-    if (response.ok && data.video_base64) {
-      setGeneratedVideo(`data:video/mp4;base64,${data.video_base64}`);
+    const imageData = await imageResponse.json();
+    if (!imageResponse.ok || !imageData.images_data || imageData.images_data.length < 2) {
+      throw new Error(imageData.error || "Failed to generate enough images (minimum 2 required).");
+    }
+
+    // Convert base64 images to File objects
+    const imageFiles = imageData.images_data
+      .filter(img => img) // Filter out nulls
+      .map((base64, index) => base64ToFile(base64, `image_${index}.png`));
+
+    if (imageFiles.length < 2) {
+      throw new Error("Not enough valid images generated.");
+    }
+
+    // Step 2: Create video from generated images
+    const formData = new FormData();
+    imageFiles.forEach(file => formData.append("images", file));
+    formData.append("fps", 24);
+    formData.append("duration", 2.0); // Adjust as needed for total duration
+    formData.append("transition_duration", 1.0);
+
+    const videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
+      method: "POST",
+      body: formData,
+    });
+
+    const videoData = await videoResponse.json();
+    if (videoResponse.ok && videoData.video_base64) {
+      setGeneratedVideo(`data:video/mp4;base64,${videoData.video_base64}`);
+      message.success("Video generated successfully!");
     } else {
-      message.error(data.error || "Video generation failed.");
+      throw new Error(videoData.error || "Video generation failed.");
     }
   } catch (error) {
-    console.error("Video generation error:", error);
-    message.error("Failed to generate video.");
+    console.error("Error during generation:", error);
+    message.error(error.message || "Failed to generate video.");
+  } finally {
+    setLoading(false);
   }
-  setLoading(false);
 };
 
   return (
@@ -142,37 +221,37 @@ const handleGenerate = async () => {
         }}
       >
         {loading ? (
-  <Spin tip="Generating video..." />
-) : generatedVideo ? (
-  <div
-    style={{
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      marginTop: 24,
-    }}
-  >
-    <video
-      src={generatedVideo}
-      controls
-      style={{
-        maxWidth: "100%",
-        width: "600px",
-        borderRadius: "8px",
-        boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
-      }}
-    />
-    <Button
-      type="default"
-      style={{ marginTop: 12 }}
-      onClick={handleSaveVideo}
-    >
-      Save Video
-    </Button>
-  </div>
-) : (
-  <Empty description="No videos yet" />
-)}
+          <Spin tip="Generating video..." />
+        ) : generatedVideo ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              marginTop: 24,
+            }}
+          >
+            <video
+              src={generatedVideo}
+              controls
+              style={{
+                maxWidth: "100%",
+                width: "600px",
+                borderRadius: "8px",
+                boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
+              }}
+            />
+            <Button
+              type="default"
+              style={{ marginTop: 12 }}
+              onClick={handleSaveVideo}
+            >
+              Save Video
+            </Button>
+          </div>
+        ) : (
+          <Empty description="No videos yet" />
+        )}
 
       </Flex>
 
@@ -213,7 +292,7 @@ const handleGenerate = async () => {
             fontSize: "18px",
             background: "#A56EFF",
           }}
-          onClick={handleGenerate}
+          onClick={() => handleGenerate()}
         >
           Generate
         </Button>
