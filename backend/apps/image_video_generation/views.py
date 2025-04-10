@@ -13,6 +13,9 @@ from django.conf import settings
 import io
 import requests
 from gradio_client import Client, handle_file
+from moviepy import ImageSequenceClip, concatenate_videoclips, vfx
+import tempfile
+import numpy as np
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -96,6 +99,77 @@ def generate_image(request):
         logger.error(f"Error generating image: {e}")
         return JsonResponse({'error': str(e)}, status=500)
     
+
+@csrf_exempt
+def generate_images_from_story(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        story = data.get('story')
+        style = data.get('style', 'realistic')
+        resolution = data.get('resolution', '1024x1024')
+        aspect_ratio = data.get('aspect_ratio', '16:9')
+
+        if not story:
+            return JsonResponse({'error': 'Story is required'}, status=400)
+
+        # Split story into paragraphs
+        paragraphs = [p.strip() for p in story.split('\n') if p.strip()]
+        
+        client = genai.Client(api_key=GOOGLE_API_KEY)
+        images_data = []
+
+        for paragraph in paragraphs:
+            full_prompt = f"Generate not text image: {paragraph}, style: {style}, resolution: {resolution}, ({aspect_ratio} aspect ratio)"
+            
+            response = client.models.generate_content(
+                model="gemini-2.0-flash-exp-image-generation",
+                contents=full_prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=['Text', 'Image']
+                )
+            )
+
+            # Extract image data
+            image_data = None
+            for part in response.candidates[0].content.parts:
+                if part.inline_data and part.inline_data.mime_type.startswith('image/'):
+                    image_data = part.inline_data.data
+                    break
+
+            if image_data:
+                img = Image.open(BytesIO(image_data))
+                # Resize to match aspect ratio
+                width, height = img.size
+                aspect_width, aspect_height = map(int, aspect_ratio.split(':'))
+                target_width = width
+                target_height = int(width * aspect_height / aspect_width)
+
+                if target_height > height:
+                    target_height = height
+                    target_width = int(height * aspect_width / aspect_height)
+
+                img = img.resize((target_width, target_height), Image.LANCZOS)
+                
+                buffered = io.BytesIO()
+                img.save(buffered, format="PNG")
+                image_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                images_data.append(image_base64)
+            else:
+                images_data.append(None)  # Or handle error as you prefer
+
+        return JsonResponse({
+            'images_data': images_data,
+            'style': style,
+            'resolution': resolution,
+            'aspect_ratio': aspect_ratio
+        }, status=200)
+
+    except Exception as e:
+        logger.error(f"Error generating images: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
 
 @csrf_exempt
 def generate_video_from_image(request):
@@ -248,7 +322,124 @@ def generate_video_from_text(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
     
-
+@csrf_exempt
+def create_video_from_images(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        # Get parameters
+        image_files = request.FILES.getlist('images')
+        fps = int(request.POST.get('fps', 24))
+        duration_per_image = float(request.POST.get('duration', 2.0))
+        transition_duration = float(request.POST.get('transition_duration', 1.0))
+        
+        if len(image_files) < 2:
+            return JsonResponse({'error': 'At least 2 images are required'}, status=400)
+        
+        # Set resolution
+        base_width, base_height = None, None
+        if resolution := request.POST.get('resolution'):
+            base_width, base_height = map(int, resolution.split('x'))
+        
+        # Calculate dimensions from first image if not provided
+        if not base_width:
+            with Image.open(image_files[0]) as img:
+                base_width, base_height = img.size
+        
+        # IMPORTANT: Ensure dimensions are even numbers (required by libx264)
+        base_width = base_width - (base_width % 2)
+        base_height = base_height - (base_height % 2)
+        
+        # Create temporary directory for storing processed frames
+        with tempfile.TemporaryDirectory() as temp_dir:
+            clips = []
+            
+            # Process each image and create clips
+            for i, img_file in enumerate(image_files):
+                # Create a unique subdirectory for each image's frames
+                img_dir = os.path.join(temp_dir, f"img_{i}")
+                os.makedirs(img_dir)
+                
+                # Adjusted duration for overlap
+                adjusted_duration = duration_per_image + transition_duration if i < len(image_files) - 1 else duration_per_image
+                num_frames = int(fps * adjusted_duration)
+                
+                # Process image once
+                with Image.open(img_file) as img:
+                    # Resize to ensure even dimensions
+                    img = img.resize((base_width, base_height), Image.LANCZOS)
+                    
+                    # Generate and save frames to disk instead of keeping them in memory
+                    for t in range(num_frames):
+                        frame_path = os.path.join(img_dir, f"{t:06d}.jpg")
+                        
+                        # Calculate zoom factor
+                        zoom = 1 + 0.1 * (t / (num_frames - 1)) if num_frames > 1 else 1
+                        
+                        # Apply zoom effect while ensuring dimensions stay even
+                        zoomed_width = int(base_width * zoom)
+                        zoomed_height = int(base_height * zoom)
+                        # Ensure zoomed dimensions are even
+                        zoomed_width = zoomed_width - (zoomed_width % 2)
+                        zoomed_height = zoomed_height - (zoomed_height % 2)
+                        
+                        # Create zoomed image
+                        with img.resize((zoomed_width, zoomed_height), Image.LANCZOS) as zoomed_img:
+                            # Calculate crop coordinates
+                            left = (zoomed_width - base_width) // 2
+                            top = (zoomed_height - base_height) // 2
+                            right = left + base_width
+                            bottom = top + base_height
+                            
+                            # Crop and save the frame
+                            with zoomed_img.crop((left, top, right, bottom)) as cropped_img:
+                                # Use quality parameter to reduce file size
+                                cropped_img.save(frame_path, 'JPEG', quality=85)
+                
+                # Create clip from saved frames
+                clip = ImageSequenceClip(img_dir, fps=fps)
+                clips.append(clip)
+            
+            # Use different concatenation approach
+            padding = -transition_duration if len(clips) > 1 else 0
+            final_clip = concatenate_videoclips(clips, method="compose", padding=padding)
+            
+            # Set output file path
+            output_path = os.path.join(temp_dir, 'output.mp4')
+            
+            # Debug information
+            logger.info(f"Creating video with dimensions: {base_width}x{base_height} (both must be even)")
+            
+            # Write final video with optimized settings
+            final_clip.write_videofile(
+                output_path,
+                fps=fps,
+                codec='libx264',
+                audio=False,
+                threads=min(os.cpu_count() or 4, 8),
+                preset='faster',
+                ffmpeg_params=['-crf', '24', '-pix_fmt', 'yuv420p'],
+                logger='bar',
+            )
+            
+            # Read and encode video with streaming to avoid loading entire file into memory
+            with open(output_path, 'rb') as f:
+                    video_data = f.read()
+                
+            video_base64 = base64.b64encode(video_data).decode('utf-8')
+            
+            return JsonResponse({
+                'video_base64': video_base64,
+                'resolution': f"{base_width}x{base_height}",
+                'frame_count': sum(int(fps * (duration_per_image + (transition_duration if i < len(image_files) - 1 else 0))) 
+                                   for i in range(len(image_files))),
+                'total_duration': final_clip.duration
+            })
+    
+    except Exception as e:
+        logger.error(f"Video creation error: {str(e)}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
     
 # @csrf_exempt
 # def generate_video_from_image(request):
