@@ -15,7 +15,7 @@ function Tools() {
   const tool = params.get("tool");
 
   const ToolComponent = toolComponentMap[tool];
-
+  
   useEffect(() => {
     if (tool && !toolComponentMap[tool]) {
       navigate("/dashboard");

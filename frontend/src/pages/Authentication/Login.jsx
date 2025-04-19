@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Modal, Button, Input, Typography, Divider, notification } from "antd";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Modal, Button, Input, Typography, Divider, message } from "antd";
 import { useAuth } from "/src/context/AuthContext";
 
 const { Title, Paragraph } = Typography;
@@ -9,20 +9,24 @@ function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [api, contextHolder] = notification.useNotification();
+  const [messageApi, contextHolder] = message.useMessage();
   const { login } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
 
-  const openNotification = () => {
-    api['success']({
-      message: "Login Successful",
-      description:
-        "You have successfully logged in to your account.",
-      showProgress: true,
-      pauseOnHover: false,
+  
+  const openNotification = (message) => {
+    messageApi.open({
+      type: 'success',
+      content: message,
     });
   };
-
+  
+  const notification = location.state?.notification || null;
+  if (notification) {
+    messageApi.success(notification, 2.5); // Show success message for 2.5 seconds
+  }
+  
   const handleSubmit = async (e) => {
     setLoading(true);
     e.preventDefault();
@@ -30,7 +34,7 @@ function Login() {
     try {
       const data = await login({ username, password });
       openNotification();
-      navigate("/dashboard");
+      navigate("/dashboard", { state: { notification: "Login successful!" } });
     } catch (error) {
       console.log(error);
       alert(error);
