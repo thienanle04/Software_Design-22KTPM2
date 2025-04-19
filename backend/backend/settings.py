@@ -26,7 +26,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-@#0=um2#itgo2fefn#vs$h#2i2bzkj(h3u7&jfc-yjaw13$ya@'
-
+GEMINI_API_KEY = 'AIzaSyDwPAWXbsHxzlPozHgsu5B-HT9lxd0RKX8'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -57,7 +57,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
-    'apps',
+    'apps.crawler',
 ]
 
 MIDDLEWARE = [
@@ -146,3 +146,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWS_CREDENTIALS = True
+
+GOOGLE_API_KEY = 'AIzaSyByoBiEBP61AqgyBXodHljUdDnk3IBFBDk'
+API_URL = "https://a424-34-169-254-9.ngrok-free.app/"
+TEXT_TO_VIDEO_API_URL = "https://22d8-34-126-138-91.ngrok-free.app/"

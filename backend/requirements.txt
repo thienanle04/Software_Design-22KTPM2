@@ -6,3 +6,15 @@ djangorestframework-simplejwt
 PyJWT
 pytz
 python-dotenv
+
+pytesseract 
+beautifulsoup4
+python-docx 
+pymupdf
+Pillow
+google.genai
+requests
+moviepy 
+numpy 
+imageio 
+imageio-ffmpeg
