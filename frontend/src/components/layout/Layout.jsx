@@ -15,7 +15,7 @@ import {
   LoginOutlined,
 } from "@ant-design/icons";
 import SideBar from "./SideBar";
-import { useAuth } from "/src/context/authContext";
+import { useAuth } from "/src/context/AuthContext";
 import TopNav from "./TopNav";
 
 const { Header, Content, Footer } = Layout;
