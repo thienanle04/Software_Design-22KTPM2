@@ -5,7 +5,6 @@ import { ConfigProvider } from "antd";
 import "@ant-design/v5-patch-for-react-19";
 
 createRoot(document.getElementById("root")).render(
-  <StrictMode>
     <ConfigProvider
       theme={{
         token: {
@@ -19,5 +18,4 @@ createRoot(document.getElementById("root")).render(
     >
       <App />
     </ConfigProvider>
-  </StrictMode>
 );

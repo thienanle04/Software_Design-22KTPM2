@@ -14,14 +14,96 @@ import {
 } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useNavigate, useLocation } from "react-router-dom";
+import VideoList from "./VideoList";
+import StickyHeader from "./StickyHeader";
+import UserInputSection from "./UserInputSection";
+import VideoDetails from "./VideoDetails";
 
-const { TabPane } = Tabs;
-const { TextArea } = Input;
-const { Title, Paragraph, Text } = Typography;
+function EmptyDisplay() {
+  return (
+    <Empty
+      description={
+        <span style={{ fontSize: "16px", color: "#000" }}>No videos yet.</span>
+      }
+      style={{ marginTop: "20px" }}
+    />
+  );
+}
+
+const myVideos = [
+  {
+    id: 1,
+    url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+    prompt: "A beautiful sunset over the mountains",
+    script: "A beautiful sunset over the mountains",
+  },
+  {
+    id: 2,
+    url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    prompt: "A serene beach with waves crashing",
+    script: "A serene beach with waves crashing",
+  },
+  {
+    id: 3,
+    url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+    prompt: "A bustling city street at night",
+    script: "A bustling city street at night",
+  },
+  {
+    id: 4,
+    url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+    prompt: "A tranquil forest with birds chirping",
+    script: "A tranquil forest with birds chirping",
+  },
+  {
+    id: 5,
+    // other video url
+    url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4" ,
+    prompt: "A vibrant city skyline at dusk",
+    script: "A vibrant city skyline at dusk",
+  },
+  {
+    id: 6,
+    url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+    prompt: "A snowy mountain peak under a clear sky",
+    script: "A snowy mountain peak under a clear sky",
+  },
+  {
+    id: 7,
+    url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" ,
+    prompt: "A colorful garden filled with blooming flowers",
+    script: "A colorful garden filled with blooming flowers",
+  },
+  {
+    id: 8,
+    url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
+    prompt: "A peaceful lake surrounded by trees",
+    script: "A peaceful lake surrounded by trees",
+  }
+];
+const inspirations = [
+  {
+    id: 1,
+    url: "https://www.w3schools.com/html/mov_bbb.mp4",
+    prompt: "A beautiful sunset over the mountains",
+    script: "A beautiful sunset over the mountains",
+  },
+  {
+    id: 2,
+    url: "https://www.w3schools.com/html/mov_bbb.mp4",
+    prompt: "A serene beach with waves crashing",
+    script: "A serene beach with waves crashing",
+  },
+];
 
 const TextToVideo = () => {
+  const [selectedVideo, setSelectedVideo] = useState(null); // State to hold the selected video
+  const [modalVisible, setModalVisible] = useState(false); // State to control the visibility of the modal
   const [prompt, setPrompt] = useState("");
   const [tab, setTab] = useState("My Creations");
+  const [mycreationList, setVideoList] = useState(myVideos);
+  const [inspirationList, setInspirationList] = useState(inspirations);
+  const [messageApi, contextHolder] = message.useMessage(); // Message API for notifications
   const location = useLocation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false); // Loading state for API call
@@ -33,8 +115,9 @@ const TextToVideo = () => {
     }
   }, [location.state]);
 
-  const handlePromptChange = (e) => {
-    setPrompt(e.target.value);
+  const closeModal = () => {
+    setModalVisible(false);
+    setSelectedVideo(null);
   };
 
  // Handle video save/download
@@ -160,56 +243,9 @@ const handleGenerate = async () => {
 
   return (
     <div style={{ background: "#ebebec" }}>
-      <div
-        style={{
-          position: "sticky",
-          top: "0",
-          width: "100%",
-          zIndex: 1,
-          background: "#ebebec",
-        }}
-      >
-        <div style={{ padding: "16px" }}>
-          <Flex
-            align="center"
-            gap="0"
-            style={{
-              width: "fit-content",
-              padding: "8px",
-              borderRadius: "10px",
-              background: "#fff",
-              boxShadow: "0 4px 8px rgba(0, 0, 0, 0.15)",
-            }}
-          >
-            <Button
-              type="text"
-              icon={<ArrowLeftOutlined />}
-              onClick={() => navigate("/dashboard/")}
-            />
-            <Divider type="vertical" />
-            <Text strong={true} style={{ fontSize: "20px", color: "#000" }}>
-              Text to Video
-            </Text>
-            <Divider type="vertical" />
-          </Flex>
+      {contextHolder}
 
-          {/* Tabs for My Creations and Inspirations */}
-          <Flex style={{ width: "100%" }}>
-            <Segmented
-              size="large"
-              options={["My Creations", "Inspirations"]}
-              value={tab}
-              onChange={setTab}
-              style={{
-                margin: "30px 0",
-                borderRadius: "10px",
-                padding: "0px",
-                background: "#ebebec",
-              }}
-            />
-          </Flex>
-        </div>
-      </div>
+      <StickyHeader tab={tab} setTab={setTab} />
 
       <Flex
         vertical="column"
@@ -217,91 +253,52 @@ const handleGenerate = async () => {
         gap="small"
         style={{
           borderRadius: "10px",
-          minHeight: "calc(100vh - 64px - 24px)",
+          minHeight: "calc(100vh - 200px)",
+          width: "100%",
         }}
       >
-        {loading ? (
-          <Spin tip="Generating video..." />
-        ) : generatedVideo ? (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              marginTop: 24,
-            }}
-          >
-            <video
-              src={generatedVideo}
-              controls
-              style={{
-                maxWidth: "100%",
-                width: "600px",
-                borderRadius: "8px",
-                boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
+        {tab === "My Creations" ? (
+          myVideos.length === 0 ? (
+            <EmptyDisplay />
+          ) : (
+            <VideoList
+              videos={mycreationList}
+              onVideoClick={(video) => {
+                setSelectedVideo(video);
+                setModalVisible(true);
               }}
             />
-            <Button
-              type="default"
-              style={{ marginTop: 12 }}
-              onClick={handleSaveVideo}
-            >
-              Save Video
-            </Button>
-          </div>
+          )
+        ) : inspirations.length === 0 ? (
+          <EmptyDisplay />
         ) : (
-          <Empty description="No videos yet" />
+          <VideoList
+            videos={inspirationList}
+            onVideoClick={(video) => {
+              setSelectedVideo(video);
+              setModalVisible(true);
+            }}
+          />
         )}
-
       </Flex>
 
       {/* Video Generation Controls Section */}
-      <Flex
-        vertical="column"
-        align="end"
-        gap="small"
-        style={{
-          width: "70%",
-          position: "sticky",
-          bottom: "40px",
-          padding: "16px",
-          borderRadius: "10px",
-          justifySelf: "center",
-          background: "#fff",
-          boxShadow: "0 4px 8px rgba(0, 0, 0, 0.15)",
-        }}
-      >
-        <TextArea
-          value={prompt}
-          onChange={handlePromptChange}
-          placeholder="Describe your video..."
-          style={{
-            borderRadius: "8px",
-            height: "50px",
-            fontSize: "16px",
-            width: "100%",
-            border: "0px",
-            outline: "2px solid rgb(255, 255, 255)",
-          }}
-          autoSize={{ minRows: 3, maxRows: 7 }}
+      <UserInputSection
+        prompt={prompt}
+        onPromptChange={(e) => setPrompt(e.target.value)}
+      />
+
+      {selectedVideo && (
+        <VideoDetails
+          video={selectedVideo}
+          visible={modalVisible}
+          onClose={closeModal}
+          onRegenerate={handleGenerate}
         />
-        <Button
-          type="primary"
-          style={{
-            borderRadius: "8px",
-            fontSize: "18px",
-            background: "#A56EFF",
-          }}
-          onClick={() => handleGenerate()}
-        >
-          Generate
-        </Button>
-      </Flex>
+      )}
 
       {/* Custom Scrollbar Styles */}
-      <style jsx>{`
-        /* Hide the scrollbar */
-        /* Custom Scrollbar Styling */
+      <style>{`
         textarea::-webkit-scrollbar {
           height: 8px;
         }

@@ -1,17 +1,16 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Input, Button, Typography, Flex, message } from "antd";
 import { FaDice } from "react-icons/fa";
 
-const Home = () => {
-  const {
-    token: { colorBgContainer, borderRadiusLG },
-  } = theme.useToken();
+const { Title, Paragraph } = Typography;
+
+function GenerateButtonIcon() {
   return (
     <svg
       className="size-4"
-      width="17"
-      height="16"
+      width="17" // Set the width of the SVG icon
+      height="16" // Set the height of the SVG icon
       fill="none"
       viewBox="0 0 17 16"
     >
@@ -23,50 +22,29 @@ const Home = () => {
   );
 }
 
-function Home() {
+function Dashboard() {
   const [prompt, setPrompt] = useState("");
-  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) {
-      message.warning("Please enter a prompt");
-      return;
+  const location = useLocation();
+  const [messageApi, contextHolder] = message.useMessage();
+
+  // This effect runs once after the component mounts
+  useEffect(() => {
+    // Check if there is a notification state passed via location
+    if (location.state && location.state.notification) {
+      message.open({
+        content: location.state.notification,
+        duration: 2,
+      });
     }
+  }, [location.state, messageApi]); // Dependency array ensures the effect runs once
 
-    setLoading(true);
+  const handleGenerate = () => {
+    if (prompt.trim()) {
+      navigate("/dashboard/tools/text-to-video", { state: { prompt } });
+    } else {
 
-    try {
-      const response = await fetch("http://127.0.0.1:8000/api/gen_script/simplified-science/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: prompt,
-          audience: "children" // Có thể thay đổi theo nhu cầu
-        }),
-      });
-
-      const data = await response.json();
-      console.log("API Response:", data.simplified_explanation);
-
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to generate simplified explanation");
-      }
-
-      navigate("/dashboard/tools/text-to-video", {
-        state: {
-          prompt: data.simplified_explanation
-        }
-      });
-
-    } catch (error) {
-      console.error("API Error:", error);
-      message.error(error.message || "Failed to process your request");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -74,13 +52,13 @@ function Home() {
     <div
       style={{
         padding: "40px 20px",
-        background: "linear-gradient(to right, rgb(186, 213, 254), rgb(224, 187, 236))",
+        background:
+          "linear-gradient(to right,rgb(186, 213, 254), rgb(224, 187, 236))",
         borderRadius: "10px",
       }}
     >
-      <Title level={2} style={{ justifySelf: "center", padding: "20px" }}>
-        Describe your ideas and generate
-      </Title>
+      {contextHolder}
+      <Title level={2} style={{ justifySelf: "center", padding: "20px" }}>Describe your ideas and generate</Title>
       <Paragraph style={{ fontSize: "18px" }}>
         Transform your words into visual masterpieces: Leverage AI technology to
         craft breathtaking videos.
@@ -102,7 +80,6 @@ function Home() {
             background: "#fff",
             fontSize: "16px",
           }}
-          onPressEnter={handleGenerate}
         />
         <Button
           type="primary"
@@ -114,7 +91,6 @@ function Home() {
           }}
           icon={<GenerateButtonIcon />}
           onClick={handleGenerate}
-          loading={loading}
         >
           Generate
         </Button>
@@ -123,4 +99,4 @@ function Home() {
   );
 }
 
-export default Home;
+export default Dashboard;

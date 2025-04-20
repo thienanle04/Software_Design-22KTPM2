@@ -7,7 +7,7 @@ import {
   PictureOutlined,
   HomeOutlined,
   DashboardOutlined,
-  VideoCameraOutlined,
+  LinkOutlined,
 } from "@ant-design/icons";
 import Logo from "/src/components/ui/Logo";
 
@@ -36,20 +36,19 @@ const menuList = [
 
 const tools = [
   // {
-  //   link: "/dashboard/tools?tool=text-to-image",
-  //   label: "Text To Image",
+  //   link: "/dashboard/tools?tool=image-to-video",
+  //   label: "Image To Video",
   //   icon: <PictureOutlined />,
   // },
-  {
-    link: "/dashboard/tools?tool=image-to-video",
-    label: "Image To Video",
-    // icon: <VideoCameraOutlined />,
-    icon: <PictureOutlined />,
-  },
   {
     link: "/dashboard/tools/text-to-video",
     label: "Text To Video",
     icon: <VideoCameraAddOutlined />,
+  },
+  {
+    link: "/dashboard/tools?tool=url-to-video",
+    label: "URL To Video",
+    icon: <LinkOutlined />,
   }
 ]
 
