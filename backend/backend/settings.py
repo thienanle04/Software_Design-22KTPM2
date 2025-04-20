@@ -15,7 +15,8 @@ from datetime import timedelta
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,7 +27,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-@#0=um2#itgo2fefn#vs$h#2i2bzkj(h3u7&jfc-yjaw13$ya@'
-GEMINI_API_KEY = 'YOUR_API_KEY_HERE'
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
