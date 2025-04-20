@@ -148,6 +148,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWS_CREDENTIALS = True
 
-GOOGLE_API_KEY = 'AIzaSyByoBiEBP61AqgyBXodHljUdDnk3IBFBDk'
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 API_URL = "https://a424-34-169-254-9.ngrok-free.app/"
 TEXT_TO_VIDEO_API_URL = "https://22d8-34-126-138-91.ngrok-free.app/"
