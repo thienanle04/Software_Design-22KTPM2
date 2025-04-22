@@ -18,7 +18,7 @@ function Register() {
 
     try {
       const data = await register({ username, password });
-      navigate("/login", { state: { notification: "Registration successful! Please login." } });
+      navigate("/dashboard/login", { state: { notification: "Registration successful! Please login." } });
     } catch (error) {
       console.log(error);
       alert(error);

@@ -18,3 +18,5 @@ moviepy
 numpy 
 imageio 
 imageio-ffmpeg
+gradio-client
+google.generativeai
