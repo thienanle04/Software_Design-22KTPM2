@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { Input, Button, Typography, Flex, message } from "antd";
 import { FaDice } from "react-icons/fa";
 
-const { Title, Paragraph } = Typography;
+const {Title, Paragraph } = Typography;
 
-function GenerateButtonIcon() {
+const GenerateButtonIcon = () => {
   return (
     <svg
       className="size-4"
@@ -36,34 +36,31 @@ function Home() {
     setLoading(true);
 
     try {
-      const response = await fetch(
-        "http://127.0.0.1:8000/api/gen_script/simplified-science/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            content: prompt,
-            audience: "children", // Có thể thay đổi theo nhu cầu
-          }),
-        }
-      );
+      const response = await fetch("http://127.0.0.1:8000/api/gen_script/simplified-science/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: prompt,
+          audience: "children" // Có thể thay đổi theo nhu cầu
+        }),
+      });
 
       const data = await response.json();
       console.log("API Response:", data.simplified_explanation);
 
+
       if (!response.ok) {
-        throw new Error(
-          data.error || "Failed to generate simplified explanation"
-        );
+        throw new Error(data.error || "Failed to generate simplified explanation");
       }
 
       navigate("/dashboard/tools/text-to-video", {
         state: {
-          prompt: data.simplified_explanation,
-        },
+          prompt: data.simplified_explanation
+        }
       });
+
     } catch (error) {
       console.error("API Error:", error);
       message.error(error.message || "Failed to process your request");
@@ -76,8 +73,7 @@ function Home() {
     <div
       style={{
         padding: "40px 20px",
-        background:
-          "linear-gradient(to right, rgb(186, 213, 254), rgb(224, 187, 236))",
+        background: "linear-gradient(to right, rgb(186, 213, 254), rgb(224, 187, 236))",
         borderRadius: "10px",
       }}
     >
