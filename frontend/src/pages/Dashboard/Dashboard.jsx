@@ -9,8 +9,8 @@ function GenerateButtonIcon() {
   return (
     <svg
       className="size-4"
-      width="17" // Set the width of the SVG icon
-      height="16" // Set the height of the SVG icon
+      width="17"
+      height="16"
       fill="none"
       viewBox="0 0 17 16"
     >
@@ -24,27 +24,58 @@ function GenerateButtonIcon() {
 
 function Dashboard() {
   const [prompt, setPrompt] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-
   const location = useLocation();
   const [messageApi, contextHolder] = message.useMessage();
 
-  // This effect runs once after the component mounts
   useEffect(() => {
-    // Check if there is a notification state passed via location
     if (location.state && location.state.notification) {
-      message.open({
+      messageApi.open({
         content: location.state.notification,
         duration: 2,
       });
     }
-  }, [location.state, messageApi]); // Dependency array ensures the effect runs once
+  }, [location.state, messageApi]);
 
-  const handleGenerate = () => {
-    if (prompt.trim()) {
-      navigate("/dashboard/tools/text-to-video", { state: { prompt } });
-    } else {
+  const handleGenerate = async () => {
+    if (!prompt.trim()) {
+      messageApi.warning("Please enter a prompt");
+      return;
+    }
 
+    setLoading(true);
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/gen_script/simplified-science/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: prompt,
+          audience: "children"
+        }),
+      });
+
+      const data = await response.json();
+      console.log("API Response:", data.simplified_explanation);
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate simplified explanation");
+      }
+
+      navigate("/dashboard/tools/text-to-video", {
+        state: {
+          prompt: data.simplified_explanation
+        }
+      });
+
+    } catch (error) {
+      console.error("API Error:", error);
+      messageApi.error(error.message || "Failed to process your request");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -52,13 +83,14 @@ function Dashboard() {
     <div
       style={{
         padding: "40px 20px",
-        background:
-          "linear-gradient(to right,rgb(186, 213, 254), rgb(224, 187, 236))",
+        background: "linear-gradient(to right, rgb(186, 213, 254), rgb(224, 187, 236))",
         borderRadius: "10px",
       }}
     >
       {contextHolder}
-      <Title level={2} style={{ justifySelf: "center", padding: "20px" }}>Describe your ideas and generate</Title>
+      <Title level={2} style={{ justifySelf: "center", padding: "20px" }}>
+        Describe your ideas and generate
+      </Title>
       <Paragraph style={{ fontSize: "18px" }}>
         Transform your words into visual masterpieces: Leverage AI technology to
         craft breathtaking videos.
@@ -80,6 +112,7 @@ function Dashboard() {
             background: "#fff",
             fontSize: "16px",
           }}
+          onPressEnter={handleGenerate}
         />
         <Button
           type="primary"
@@ -91,6 +124,7 @@ function Dashboard() {
           }}
           icon={<GenerateButtonIcon />}
           onClick={handleGenerate}
+          loading={loading}
         >
           Generate
         </Button>

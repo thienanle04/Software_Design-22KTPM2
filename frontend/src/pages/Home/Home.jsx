@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Input, Button, Typography, Flex, message } from "antd";
 import { FaDice } from "react-icons/fa";
 
-const {Title, Paragraph } = Typography;
+const { Title, Paragraph } = Typography;
 
 const GenerateButtonIcon = () => {
   return (
@@ -27,45 +27,11 @@ function Home() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) {
-      message.warning("Please enter a prompt");
-      return;
-    }
+  const handleGenerate = () => {
+    if (prompt.trim()) {
+      navigate("/dashboard/tools/text-to-video", { state: { prompt } });
+    } else {
 
-    setLoading(true);
-
-    try {
-      const response = await fetch("http://127.0.0.1:8000/api/gen_script/simplified-science/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: prompt,
-          audience: "children" // Có thể thay đổi theo nhu cầu
-        }),
-      });
-
-      const data = await response.json();
-      console.log("API Response:", data.simplified_explanation);
-
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to generate simplified explanation");
-      }
-
-      navigate("/dashboard/tools/text-to-video", {
-        state: {
-          prompt: data.simplified_explanation
-        }
-      });
-
-    } catch (error) {
-      console.error("API Error:", error);
-      message.error(error.message || "Failed to process your request");
-    } finally {
-      setLoading(false);
     }
   };
 
