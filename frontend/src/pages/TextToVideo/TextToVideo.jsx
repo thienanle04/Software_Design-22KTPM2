@@ -207,7 +207,7 @@ const handleGenerate = async () => {
 
     // Convert base64 images to File objects
     const imageFiles = imageData.images_data
-      .filter(img => img) // Filter out nulls
+      .filter(img => img)
       .map((base64, index) => base64ToFile(base64, `image_${index}.png`));
 
     if (imageFiles.length < 2) {
@@ -218,7 +218,7 @@ const handleGenerate = async () => {
     const formData = new FormData();
     imageFiles.forEach(file => formData.append("images", file));
     formData.append("fps", 24);
-    formData.append("duration", 2.0); // Adjust as needed for total duration
+    formData.append("duration", 2.0);
     formData.append("transition_duration", 1.0);
 
     const videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
@@ -228,7 +228,14 @@ const handleGenerate = async () => {
 
     const videoData = await videoResponse.json();
     if (videoResponse.ok && videoData.video_base64) {
-      setGeneratedVideo(`data:video/mp4;base64,${videoData.video_base64}`);
+      const newVideo = {
+        id: mycreationList.length + 1,
+        url: `data:video/mp4;base64,${videoData.video_base64}`,
+        prompt,
+        script: prompt,
+      };
+      setGeneratedVideo(newVideo.url);
+      setVideoList([newVideo, ...mycreationList]); // Add to video list
       message.success("Video generated successfully!");
     } else {
       throw new Error(videoData.error || "Video generation failed.");
@@ -258,7 +265,7 @@ const handleGenerate = async () => {
         }}
       >
         {tab === "My Creations" ? (
-          myVideos.length === 0 ? (
+          mycreationList.length === 0 ? (
             <EmptyDisplay />
           ) : (
             <VideoList
@@ -269,7 +276,7 @@ const handleGenerate = async () => {
               }}
             />
           )
-        ) : inspirations.length === 0 ? (
+        ) : inspirationList.length === 0 ? (
           <EmptyDisplay />
         ) : (
           <VideoList
@@ -286,6 +293,7 @@ const handleGenerate = async () => {
       <UserInputSection
         prompt={prompt}
         onPromptChange={(e) => setPrompt(e.target.value)}
+        onGenerate={handleGenerate}
       />
 
       {selectedVideo && (

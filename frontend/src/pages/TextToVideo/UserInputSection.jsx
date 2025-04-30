@@ -3,10 +3,10 @@ import { Button, Input, Flex, message } from "antd";
 
 const { TextArea } = Input;
 
-function UserInputSection({ prompt, onPromptChange }) {
+function UserInputSection({ prompt, onPromptChange, onGenerate }) {
   const handleGenerate = () => {
     if (prompt.trim()) {
-      navigate("/dashboard/tools/text-to-video", { state: { prompt } });
+      onGenerate(); // Call the passed onGenerate function
     } else {
       message.open({
         type: "error",
