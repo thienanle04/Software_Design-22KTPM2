@@ -1,91 +1,179 @@
-import React, { useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Input, Button, Typography, Flex, message } from "antd";
-import { FaDice } from "react-icons/fa";
+import { Button, Typography, Card, Flex, Space } from "antd";
+import { RocketOutlined, FileTextOutlined, SoundOutlined, VideoCameraOutlined, CloudUploadOutlined, DatabaseOutlined } from "@ant-design/icons";
 
 const { Title, Paragraph } = Typography;
 
-const GenerateButtonIcon = () => {
-  return (
-    <svg
-      className="size-4"
-      width="17"
-      height="16"
-      fill="none"
-      viewBox="0 0 17 16"
-    >
-      <path
-        fill="currentColor"
-        d="M6.154 6.513c.429-.096.763-.43.86-.859l.665-2.995c.195-.879 1.447-.879 1.642 0l.666 2.995c.096.429.43.763.858.86l2.996.665c.879.195.879 1.447 0 1.642l-2.995.666c-.429.096-.763.43-.86.858l-.665 2.996c-.195.879-1.447.879-1.642 0l-.666-2.995a1.134 1.134 0 0 0-.859-.86L3.16 8.822c-.879-.195-.879-1.447 0-1.642l2.995-.666Z"
-      ></path>
-    </svg>
-  );
-}
-
-function Home() {
-  const [prompt, setPrompt] = useState("");
-  const [loading, setLoading] = useState(false);
+const Home = () => {
   const navigate = useNavigate();
 
-  const handleGenerate = () => {
-    if (prompt.trim()) {
-      navigate("/dashboard/tools/text-to-video", { state: { prompt } });
-    } else {
-
-    }
-  };
+  const features = [
+    {
+      icon: <DatabaseOutlined style={{ fontSize: "32px", color: "#6a58b5" }} />,
+      title: "Collect Scientific Data",
+      description: "Automatically gather and clean data from sources like Wikipedia, Nature, and PubMed to fuel your videos.",
+    },
+    {
+      icon: <FileTextOutlined style={{ fontSize: "32px", color: "#6a58b5" }} />,
+      title: "Generate Engaging Scripts",
+      description: "Transform complex science into vivid, audience-tailored stories using AI, with options for manual edits.",
+    },
+    {
+      icon: <SoundOutlined style={{ fontSize: "32px", color: "#6a58b5" }} />,
+      title: "Synthesize Natural Voices",
+      description: "Create customizable AI narration in multiple languages, perfect for kids or professional content.",
+    },
+    {
+      icon: <VideoCameraOutlined style={{ fontSize: "32px", color: "#6a58b5" }} />,
+      title: "Produce Stunning Visuals",
+      description: "Generate images and videos with AI tools like DALL-E and RunwayML, with manual adjustments for accuracy.",
+    },
+    {
+      icon: <RocketOutlined style={{ fontSize: "32px", color: "#6a58b5" }} />,
+      title: "Sync and Enhance Videos",
+      description: "Seamlessly combine audio, visuals, and effects, with tools for manual synchronization and polishing.",
+    },
+    {
+      icon: <CloudUploadOutlined style={{ fontSize: "32px", color: "#6a58b5" }} />,
+      title: "Publish and Manage",
+      description: "Export videos to YouTube, TikTok, and more, with automated metadata and content management.",
+    },
+  ];
 
   return (
     <div
       style={{
         padding: "40px 20px",
         background: "linear-gradient(to right, rgb(186, 213, 254), rgb(224, 187, 236))",
+        minHeight: "100vh",
         borderRadius: "10px",
       }}
     >
-      <Title level={2} style={{ justifySelf: "center", padding: "20px" }}>
-        Describe your ideas and generate
-      </Title>
-      <Paragraph style={{ fontSize: "18px" }}>
-        Transform your words into visual masterpieces: Leverage AI technology to
-        craft breathtaking videos.
-      </Paragraph>
-      <Flex justify="space-between" align="center" gap="small">
-        <Input
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Write a prompt to generate"
-          prefix={
-            <Button
-              type="text"
-              icon={<FaDice style={{ fontSize: "20px", color: "#6a58b5" }} />}
-            />
-          }
+      {/* Hero Section */}
+      <Flex
+        vertical
+        align="center"
+        justify="center"
+        style={{ textAlign: "center", padding: "40px 20px" }}
+      >
+        <Title
+          level={1}
           style={{
-            borderRadius: "8px",
-            height: "50px",
-            background: "#fff",
-            fontSize: "16px",
+            color: "#333",
+            fontWeight: "bold",
+            marginBottom: "16px",
           }}
-          onPressEnter={handleGenerate}
-        />
+        >
+          Welcome to Science Video Creator
+        </Title>
+        <Paragraph
+          style={{
+            fontSize: "18px",
+            color: "#555",
+            maxWidth: "800px",
+            marginBottom: "24px",
+          }}
+        >
+          Unleash the power of AI to transform complex scientific concepts into engaging, dynamic videos. Our platform automates the creation of captivating content, making science accessible and exciting for everyone, especially young learners. From data collection to publishing, we’ve got you covered.
+        </Paragraph>
         <Button
           type="primary"
+          size="large"
           style={{
-            height: "50px",
             backgroundColor: "#6a58b5",
             borderRadius: "8px",
             fontSize: "18px",
+            height: "50px",
+            padding: "0 32px",
           }}
-          icon={<GenerateButtonIcon />}
-          onClick={handleGenerate}
-          loading={loading}
+          onClick={() => navigate("/dashboard")}
         >
-          Generate
+          Explore the Dashboard
         </Button>
       </Flex>
+
+      {/* Features Section */}
+      <Flex
+        vertical
+        align="center"
+        style={{ padding: "40px 20px" }}
+      >
+        <Title
+          level={2}
+          style={{
+            color: "#333",
+            marginBottom: "32px",
+            textAlign: "center",
+          }}
+        >
+          What We Offer
+        </Title>
+        <Flex
+          wrap="wrap"
+          justify="center"
+          gap="middle"
+          style={{ maxWidth: "1200px" }}
+        >
+          {features.map((feature, index) => (
+            <Card
+              key={index}
+              hoverable
+              style={{
+                width: "300px",
+                borderRadius: "10px",
+                margin: "16px",
+                boxShadow: "0 4px 8px rgba(0, 0, 0, 0.15)",
+              }}
+              bodyStyle={{ padding: "24px", textAlign: "center" }}
+            >
+              <Space direction="vertical" size="middle">
+                {feature.icon}
+                <Title level={4} style={{ color: "#333", margin: 0 }}>
+                  {feature.title}
+                </Title>
+                <Paragraph style={{ color: "#555", fontSize: "14px" }}>
+                  {feature.description}
+                </Paragraph>
+              </Space>
+            </Card>
+          ))}
+        </Flex>
+      </Flex>
+
+      {/* Footer Call to Action */}
+      <Flex
+        justify="center"
+        style={{ padding: "40px 20px", textAlign: "center" }}
+      >
+        <Paragraph
+          style={{
+            fontSize: "16px",
+            color: "#555",
+            maxWidth: "600px",
+          }}
+        >
+          Ready to bring science to life? Join us and create stunning videos that inspire curiosity and learning.
+        </Paragraph>
+      </Flex>
+      <Button
+        type="primary"
+        size="large"
+        style={{
+          backgroundColor: "#A56EFF",
+          borderRadius: "8px",
+          fontSize: "18px",
+          height: "50px",
+          padding: "0 32px",
+          display: "block",
+          margin: "0 auto",
+        }}
+        onClick={() => navigate("/dashboard/tools/text-to-video")}
+      >
+        Start Creating Now
+      </Button>
     </div>
   );
-}
+};
 
 export default Home;
