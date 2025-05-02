@@ -3,7 +3,7 @@ import { Button, Input, Flex, message } from "antd";
 
 const { TextArea } = Input;
 
-function UserInputSection({ prompt, onPromptChange, onGenerate }) {
+function UserInputSection({ prompt, onPromptChange, onGenerate, loading }) {
   const handleGenerate = () => {
     if (prompt.trim()) {
       onGenerate(); // Call the passed onGenerate function
@@ -54,6 +54,7 @@ function UserInputSection({ prompt, onPromptChange, onGenerate }) {
             background: "#A56EFF",
           }}
           onClick={handleGenerate}
+          loading={loading}
         >
           Generate
         </Button>

@@ -20,6 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework import status
 from .models import Video
 
 # Set up logging
@@ -459,6 +460,19 @@ def create_video_from_images(request):
     except Exception as e:
         logger.error(f"Video creation error: {str(e)}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
+    
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_video(request, video_id):
+    try:
+        video = Video.objects.get(id=video_id, user=request.user)
+        video.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    except Video.DoesNotExist:
+        return Response({'error': 'Video not found or you do not have permission to delete it'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Video deletion error: {str(e)}", exc_info=True)
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 class UserVideosView(APIView):
     permission_classes = [IsAuthenticated]

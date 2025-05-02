@@ -34,55 +34,55 @@ function EmptyDisplay() {
 
 const inspirations = [
   {
-    id: 1,
+    id: "insp_1",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
     prompt: "A beautiful sunset over the mountains",
     script: "A beautiful sunset over the mountains",
   },
   {
-    id: 2,
+    id: "insp_2",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
     prompt: "A serene beach with waves crashing",
     script: "A serene beach with waves crashing",
   },
   {
-    id: 3,
+    id: "insp_3",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
     prompt: "A bustling city street at night",
     script: "A bustling city street at night",
   },
   {
-    id: 4,
+    id: "insp_4",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
     prompt: "A tranquil forest with birds chirping",
     script: "A tranquil forest with birds chirping",
   },
   {
-    id: 5,
+    id: "insp_5",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4",
     prompt: "A vibrant city skyline at dusk",
     script: "A vibrant city skyline at dusk",
   },
   {
-    id: 6,
+    id: "insp_6",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
     prompt: "A snowy mountain peak under a clear sky",
     script: "A snowy mountain peak under a clear sky",
   },
   {
-    id: 7,
+    id: "insp_7",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
     prompt: "A colorful garden filled with blooming flowers",
     script: "A colorful garden filled with blooming flowers",
   },
   {
-    id: 8,
+    id: "insp_8",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
     prompt: "A peaceful lake surrounded by trees",
     script: "A peaceful lake surrounded by trees",
   },
   {
-    id: 9,
+    id: "insp_9",
     url: "https://www.w3schools.com/html/mov_bbb.mp4",
     prompt: "A beautiful sunset over the mountains",
     script: "A beautiful sunset over the mountains",
@@ -182,15 +182,67 @@ const TextToVideo = () => {
   };
 
   // Handle video save/download
-  const handleSaveVideo = () => {
-    if (!generatedVideo) return;
+  const handleSaveVideo = (videoUrl) => {
+    if (!videoUrl) {
+      messageApi.error("No video URL available for download.");
+      return;
+    }
     const link = document.createElement("a");
-    link.href = generatedVideo;
-    link.download = "generated_video.mp4";
+    link.href = videoUrl;
+    link.download = "video.mp4";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     messageApi.success("Video download started!");
+  };
+
+  // Handle video deletion
+  const handleDeleteVideo = async (videoId) => {
+    try {
+      let token = localStorage.getItem(ACCESS_TOKEN);
+      if (!token) {
+        messageApi.error("Authentication token missing. Please log in again.");
+        return;
+      }
+
+      let response = await fetch(`http://127.0.0.1:8000/api/image-video/delete-video/${videoId}/`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (response.status === 401) {
+        token = await refreshToken();
+        response = await fetch(`http://127.0.0.1:8000/api/image-video/delete-video/${videoId}/`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+        });
+      }
+
+      if (response.ok) {
+        setVideoList(mycreationList.filter((video) => video.id !== videoId));
+        setModalVisible(false);
+        setSelectedVideo(null);
+        messageApi.success("Video deleted successfully!");
+      } else {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to delete video.");
+      }
+    } catch (error) {
+      console.error("Error deleting video:", error);
+      messageApi.error(error.message || "Failed to delete video.");
+    }
+  };
+
+  // Handle prompt selection from VideoDetails
+  const handlePromptSelect = (selectedPrompt) => {
+    setPrompt(selectedPrompt);
+    closeModal();
   };
 
   // Convert base64 to File object
@@ -310,6 +362,7 @@ const TextToVideo = () => {
         setGeneratedVideo(newVideo.url);
         setVideoList([newVideo, ...mycreationList]);
         messageApi.success("Video generated and saved successfully!");
+        closeModal();
       } else {
         throw new Error(videoData.error || "Video generation failed.");
       }
@@ -366,7 +419,6 @@ const TextToVideo = () => {
         )}
       </Flex>
 
-      {/* Video Generation Controls Section */}
       <UserInputSection
         prompt={prompt}
         onPromptChange={(e) => setPrompt(e.target.value)}
@@ -379,8 +431,11 @@ const TextToVideo = () => {
           video={selectedVideo}
           visible={modalVisible}
           onClose={closeModal}
-          onRegenerate={generatedVideo && selectedVideo.url === generatedVideo ? handleGenerate : undefined}
-          onSave={generatedVideo && selectedVideo.url === generatedVideo ? handleSaveVideo : undefined}
+          onRegenerate={handleGenerate}
+          onSave={handleSaveVideo}
+          onDelete={handleDeleteVideo}
+          onPromptSelect={handlePromptSelect}
+          loading={loading}
         />
       )}
 
@@ -404,7 +459,6 @@ const TextToVideo = () => {
           border: none;
           outline: none;
         }
-          
         textarea:focus {
           border: none;
           outline: "0px solid #fff"

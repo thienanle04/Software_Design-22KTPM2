@@ -16,31 +16,34 @@ import {
 
 const { Text, Paragraph } = Typography;
 
-const textHolder =
-  "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+const VideoDetails = ({ video, visible, onClose, onRegenerate, onSave, onDelete, onPromptSelect, loading }) => {
+  const isUserVideo = video?.id && !video.id.toString().startsWith("insp_"); // Check if it's a user video (not inspiration)
 
-const items = [
-  {
-    label: "Download",
-    key: "download",
-    icon: <DownloadOutlined />,
-  },
-  {
-    label: "Delete",
-    key: "delete",
-    icon: <DeleteOutlined />,
-  },
-];
-
-const VideoDetails = ({ video, visible, onClose, onRegenerate }) => {
-  const [selectedPrompt, setSelectedPrompt] = useState(video?.prompt || "");
-  const [selectedImage, setSelectedImage] = useState(video?.image || "");
-  const [sound, setSound] = useState(null);
-
-  const handleRecreate = () => {
-    onRegenerate(selectedPrompt, selectedImage, sound);
-    onClose();
+  const handleMenuClick = ({ key }) => {
+    if (key === "download") {
+      onSave(video.url);
+    } else if (key === "delete" && isUserVideo) {
+      onDelete(video.id);
+    }
   };
+
+  const items = [
+    {
+      label: "Download",
+      key: "download",
+      icon: <DownloadOutlined />,
+    },
+    ...(isUserVideo ? [{
+      label: "Delete",
+      key: "delete",
+      icon: <DeleteOutlined />,
+    }] : []),
+  ];
+
+  // const handleRecreate = () => {
+  //   onRegenerate(selectedPrompt, selectedImage, sound);
+  //   onClose();
+  // };
 
   return (
     <Modal
@@ -52,7 +55,6 @@ const VideoDetails = ({ video, visible, onClose, onRegenerate }) => {
         top: "5vh",
       }}
       closable={false}
-      classNames={{}}
       styles={{
         content: {
           height: "90vh",
@@ -97,9 +99,10 @@ const VideoDetails = ({ video, visible, onClose, onRegenerate }) => {
         >
           <div>
             <Dropdown
-              placement="botttoright"
+              placement="bottomRight"
               menu={{
                 items,
+                onClick: handleMenuClick,
               }}
             >
               <Button
@@ -130,12 +133,14 @@ const VideoDetails = ({ video, visible, onClose, onRegenerate }) => {
                   backgroundColor: "#f0f0f0",
                   padding: 8,
                   borderRadius: 4,
+                  cursor: "pointer",
                 }}
+                onClick={() => onPromptSelect(video.prompt)}
               >
-                {textHolder}
+                {video?.prompt || "No prompt available"}
               </Paragraph>
 
-              <Text strong>Image</Text>
+              {/* <Text strong>Image</Text>
               <img
                 src={selectedImage || video.image}
                 alt="Selected"
@@ -144,7 +149,7 @@ const VideoDetails = ({ video, visible, onClose, onRegenerate }) => {
                   height: "auto",
                   borderRadius: 4,
                 }}
-              />
+              /> */}
             </Space>
           </div>
           <Space style={{ width: "100%" }} direction="vertical">
@@ -155,7 +160,7 @@ const VideoDetails = ({ video, visible, onClose, onRegenerate }) => {
             <Flex justify="space-between" gap={8}>
               <Button
                 style={{ flex: 1 }}
-                onClick={() => setSelectedPrompt(video.prompt)}
+                onClick={() => onPromptSelect(video.prompt)}
               >
                 Prompt
               </Button>
@@ -167,13 +172,16 @@ const VideoDetails = ({ video, visible, onClose, onRegenerate }) => {
               </Button>
             </Flex>
 
-            <Button
-              type="primary"
-              onClick={handleRecreate}
-              style={{ width: "100%" }}
-            >
-              Recreate
-            </Button>
+            {isUserVideo && (
+              <Button
+                type="primary"
+                onClick={onRegenerate}
+                style={{ width: "100%" }}
+                loading={loading}
+              >
+                Recreate
+              </Button>
+            )}
           </Space>
         </div>
       </Flex>
