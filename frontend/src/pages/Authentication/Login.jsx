@@ -17,16 +17,16 @@ function Login() {
   
   const openNotification = (message) => {
     messageApi.open({
-      type: 'success',
+      type: "success",
       content: message,
     });
   };
-  
+
   const notification = location.state?.notification || null;
   if (notification) {
-    messageApi.success(notification, 2.5); // Show success message for 2.5 seconds
+    messageApi.success(notification, 2.5);
   }
-  
+
   const handleSubmit = async (e) => {
     setLoading(true);
     e.preventDefault();
@@ -36,15 +36,15 @@ function Login() {
       openNotification();
       navigate("/dashboard", { state: { notification: "Login successful!" } });
     } catch (error) {
-      console.log(error);
-      alert(error);
+      console.error("Login error:", error);
+      messageApi.error(error.message || "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
   };
 
   const onClose = () => {
-    navigate("/dashboard"); // Close the modal and navigate back to dashboard or other route
+    navigate("/dashboard");
   };
 
   return (
@@ -69,7 +69,7 @@ function Login() {
         />
 
         <Divider />
-        <Button block type="primary" onClick={handleSubmit}>
+        <Button block type="primary" onClick={handleSubmit} loading={loading}>
           Login
         </Button>
 

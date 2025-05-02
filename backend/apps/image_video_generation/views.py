@@ -16,6 +16,11 @@ from gradio_client import Client, handle_file
 from moviepy import ImageSequenceClip, concatenate_videoclips, vfx
 import tempfile
 import numpy as np
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .models import Video
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -322,7 +327,8 @@ def generate_video_from_text(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
     
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def create_video_from_images(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -333,6 +339,7 @@ def create_video_from_images(request):
         fps = int(request.POST.get('fps', 24))
         duration_per_image = float(request.POST.get('duration', 2.0))
         transition_duration = float(request.POST.get('transition_duration', 1.0))
+        prompt = request.POST.get('prompt', '')  # Get prompt from request
         
         if len(image_files) < 2:
             return JsonResponse({'error': 'At least 2 images are required'}, status=400)
@@ -354,7 +361,7 @@ def create_video_from_images(request):
         # Create temporary directory for storing processed frames
         with tempfile.TemporaryDirectory() as temp_dir:
             clips = []
-            
+       
             # Process each image and create clips
             for i, img_file in enumerate(image_files):
                 # Create a unique subdirectory for each image's frames
@@ -364,7 +371,7 @@ def create_video_from_images(request):
                 # Adjusted duration for overlap
                 adjusted_duration = duration_per_image + transition_duration if i < len(image_files) - 1 else duration_per_image
                 num_frames = int(fps * adjusted_duration)
-                
+
                 # Process image once
                 with Image.open(img_file) as img:
                     # Resize to ensure even dimensions
@@ -420,26 +427,57 @@ def create_video_from_images(request):
                 threads=min(os.cpu_count() or 4, 8),
                 preset='faster',
                 ffmpeg_params=['-crf', '24', '-pix_fmt', 'yuv420p'],
-                logger='bar',
+                logger=None,  # Suppress MoviePy logs
             )
             
             # Read and encode video with streaming to avoid loading entire file into memory
             with open(output_path, 'rb') as f:
-                    video_data = f.read()
-                
+                video_data = f.read()
+
             video_base64 = base64.b64encode(video_data).decode('utf-8')
             
+            # Save video to database
+            video = Video.objects.create(
+                user=request.user,
+                video_base64=video_base64,
+                resolution=f"{base_width}x{base_height}",
+                frame_count=sum(int(fps * (duration_per_image + (transition_duration if i < len(image_files) - 1 else 0)))
+                               for i in range(len(image_files))),
+                total_duration=final_clip.duration,
+                prompt=prompt
+            )
+            
             return JsonResponse({
+                'video_id': video.id,
                 'video_base64': video_base64,
                 'resolution': f"{base_width}x{base_height}",
-                'frame_count': sum(int(fps * (duration_per_image + (transition_duration if i < len(image_files) - 1 else 0))) 
-                                   for i in range(len(image_files))),
-                'total_duration': final_clip.duration
+                'frame_count': video.frame_count,
+                'total_duration': final_clip.duration,
+                'prompt': prompt
             })
     
     except Exception as e:
         logger.error(f"Video creation error: {str(e)}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
+    
+class UserVideosView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        videos = Video.objects.filter(user=request.user).order_by('-created_at')
+        video_data = [
+            {
+                'id': video.id,
+                'video_base64': video.video_base64,
+                'resolution': video.resolution,
+                'frame_count': video.frame_count,
+                'total_duration': video.total_duration,
+                'prompt': video.prompt,
+                'created_at': video.created_at
+            }
+            for video in videos
+        ]
+        return Response(video_data)
     
 # @csrf_exempt
 # def generate_video_from_image(request):
@@ -492,3 +530,4 @@ def create_video_from_images(request):
 #     except Exception as e:
 #         logger.error(f"Video generation error: {str(e)}")
 #         return JsonResponse({'error': str(e)}, status=500)
+

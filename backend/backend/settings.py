@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'apps.crawler',
+    'apps.image_video_generation',
 ]
 
 MIDDLEWARE = [
