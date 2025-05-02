@@ -16,7 +16,7 @@ function Login() {
 
   const notification = location.state?.notification || null;
   if (notification) {
-    messageApi.success(notification, 2.5); // Show success message for 2.5 seconds
+    messageApi.success(notification, 2.5);
   }
 
   const handleSubmit = async (e) => {
@@ -27,15 +27,15 @@ function Login() {
       await login({ username, password });
       navigate("/dashboard", { state: { notification: "Login successful!" } });
     } catch (error) {
-      console.log(error);
-      alert(error);
+      console.error("Login error:", error);
+      messageApi.error(error.message || "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
   };
 
   const onClose = () => {
-    navigate("/dashboard"); // Close the modal and navigate back to dashboard or other route
+    navigate("/dashboard");
   };
 
   return (
@@ -59,7 +59,9 @@ function Login() {
           style={{ marginBottom: 8 }}
         />
 
-        <Button block type="primary" onClick={handleSubmit}>
+        <Divider />
+        
+        <Button block type="primary" onClick={handleSubmit} loading={loading}>
           Login
         </Button>
 

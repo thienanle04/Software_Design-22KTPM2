@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Input, Button, Typography, Flex, message } from "antd";
-import { FaDice } from "react-icons/fa";
+import { Input, Button, Typography, Flex, message, Upload, Select, Card } from "antd";
+import { FaDice, FaLink, FaPaperclip, FaUserFriends } from "react-icons/fa";
 
 const { Title, Paragraph } = Typography;
+const { Option } = Select;
 
 function GenerateButtonIcon() {
   return (
@@ -24,7 +25,11 @@ function GenerateButtonIcon() {
 
 function Dashboard() {
   const [prompt, setPrompt] = useState("");
+  const [url, setUrl] = useState("");
+  const [fileList, setFileList] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("text");
+  const [audience, setAudience] = useState("general");
   const navigate = useNavigate();
   const location = useLocation();
   const [messageApi, contextHolder] = message.useMessage();
@@ -38,24 +43,65 @@ function Dashboard() {
     }
   }, [location.state, messageApi]);
 
+  const beforeUpload = (file) => {
+    const isAllowedType = [
+      'text/plain',
+      'application/pdf',
+      'image/png',
+      'image/jpeg',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ].includes(file.type);
+
+    if (!isAllowedType) {
+      messageApi.error('You can only upload text, PDF, image, or Word files!');
+      return false;
+    }
+
+    const isLt5M = file.size / 1024 / 1024 < 5;
+    if (!isLt5M) {
+      messageApi.error('File must smaller than 5MB!');
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleUploadChange = ({ fileList }) => {
+    setFileList(fileList);
+  };
+
   const handleGenerate = async () => {
-    if (!prompt.trim()) {
+    if (activeTab === "text" && !prompt.trim()) {
       messageApi.warning("Please enter a prompt");
+      return;
+    }
+
+    if (activeTab === "url" && !url.trim()) {
+      messageApi.warning("Please enter a URL");
       return;
     }
 
     setLoading(true);
 
+    const formData = new FormData();
+
+    if (activeTab === "text") {
+      formData.append("content", prompt);
+    } else {
+      formData.append("url", url);
+    }
+
+    formData.append("audience", audience);
+
+    fileList.forEach(file => {
+      formData.append("files", file.originFileObj);
+    });
+
     try {
       const response = await fetch("http://127.0.0.1:8000/api/gen_script/simplified-science/", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: prompt,
-          audience: "children"
-        }),
+        body: formData,
       });
 
       const data = await response.json();
@@ -80,56 +126,147 @@ function Dashboard() {
   };
 
   return (
-    <div
+    <Card
       style={{
-        padding: "40px 20px",
+        padding: "24px",
         background: "linear-gradient(to right, rgb(186, 213, 254), rgb(224, 187, 236))",
-        borderRadius: "10px",
+        borderRadius: "12px",
+        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
       }}
     >
       {contextHolder}
-      <Title level={2} style={{ justifySelf: "center", padding: "20px" }}>
-        Describe your ideas and generate
+      <Title level={2} style={{ textAlign: "center", marginBottom: 8, color: "#2d3748" }}>
+        Content Generator
       </Title>
-      <Paragraph style={{ fontSize: "18px" }}>
-        Transform your words into visual masterpieces: Leverage AI technology to
-        craft breathtaking videos.
+      <Paragraph style={{
+        fontSize: "16px",
+        textAlign: "center",
+        marginBottom: 24,
+        color: "#4a5568"
+      }}>
+        Transform your input into engaging content tailored for your audience
       </Paragraph>
-      <Flex justify="space-between" align="center" gap="small">
-        <Input
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Write a prompt to generate"
-          prefix={
-            <Button
-              type="text"
-              icon={<FaDice style={{ fontSize: "20px", color: "#6a58b5" }} />}
-            />
-          }
-          style={{
-            borderRadius: "8px",
-            height: "50px",
-            background: "#fff",
-            fontSize: "16px",
-          }}
-          onPressEnter={handleGenerate}
-        />
-        <Button
-          type="primary"
-          style={{
-            height: "50px",
-            backgroundColor: "#6a58b5",
-            borderRadius: "8px",
-            fontSize: "18px",
-          }}
-          icon={<GenerateButtonIcon />}
-          onClick={handleGenerate}
-          loading={loading}
+
+      <div style={{ marginBottom: 24 }}>
+        <Flex gap="small" style={{ marginBottom: 16 }}>
+          <Button
+            type={activeTab === "text" ? "primary" : "default"}
+            onClick={() => setActiveTab("text")}
+            icon={<FaDice />}
+          >
+            Text Input
+          </Button>
+          <Button
+            type={activeTab === "url" ? "primary" : "default"}
+            onClick={() => setActiveTab("url")}
+            icon={<FaLink />}
+          >
+            URL Input
+          </Button>
+        </Flex>
+
+        {activeTab === "text" ? (
+          <Input.TextArea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="Enter your content here..."
+            autoSize={{ minRows: 4, maxRows: 6 }}
+            style={{
+              borderRadius: "8px",
+              background: "#fff",
+              fontSize: "16px",
+              marginBottom: 16,
+            }}
+          />
+        ) : (
+          <Input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://example.com"
+            style={{
+              borderRadius: "8px",
+              height: "50px",
+              background: "#fff",
+              fontSize: "16px",
+              marginBottom: 16,
+            }}
+            prefix={<FaLink style={{ color: "rgba(0, 0, 0, 0.25)" }} />}
+          />
+        )}
+
+        <Flex gap={16} style={{ marginBottom: 16 }}>
+          <Select
+            style={{ width: "100%" }}
+            value={audience}
+            onChange={setAudience}
+            placeholder="Select audience"
+            optionLabelProp="label"
+            suffixIcon={<FaUserFriends />}
+          >
+            <Option value="children" label="Children">
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <span role="img" aria-label="children">👶</span>
+                <span style={{ marginLeft: 8 }}>Children</span>
+              </div>
+            </Option>
+            <Option value="teenagers" label="Teenagers">
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <span role="img" aria-label="teenagers">🧒</span>
+                <span style={{ marginLeft: 8 }}>Teenagers</span>
+              </div>
+            </Option>
+            <Option value="general" label="General">
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <span role="img" aria-label="general">👥</span>
+                <span style={{ marginLeft: 8 }}>General</span>
+              </div>
+            </Option>
+            <Option value="professionals" label="Professionals">
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <span role="img" aria-label="professionals">👔</span>
+                <span style={{ marginLeft: 8 }}>Professionals</span>
+              </div>
+            </Option>
+            <Option value="academic" label="Academic">
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <span role="img" aria-label="academic">🎓</span>
+                <span style={{ marginLeft: 8 }}>Academic</span>
+              </div>
+            </Option>
+          </Select>
+        </Flex>
+
+        <Upload
+          multiple
+          beforeUpload={beforeUpload}
+          onChange={handleUploadChange}
+          fileList={fileList}
+          showUploadList={{ showPreviewIcon: true, showRemoveIcon: true }}
+          style={{ marginBottom: 16 }}
         >
-          Generate
-        </Button>
-      </Flex>
-    </div>
+          <Button icon={<FaPaperclip />} style={{ width: "100%" }}>
+            Attach Files (PDF, Word, Images)
+          </Button>
+        </Upload>
+      </div>
+
+      <Button
+        type="primary"
+        size="large"
+        style={{
+          height: "50px",
+          backgroundColor: "#6a58b5",
+          borderRadius: "8px",
+          fontSize: "18px",
+          width: "100%",
+        }}
+        icon={<GenerateButtonIcon />}
+        onClick={handleGenerate}
+        loading={loading}
+      >
+        Generate Content
+      </Button>
+    </Card>
   );
 }
 
