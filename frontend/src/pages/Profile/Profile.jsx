@@ -1,9 +1,10 @@
 import React from "react";
+import SocialConnections from "./SocialConnections"
 
 function Profile() {
   return (
     <div>
-      <h1>Profile</h1>
+      <SocialConnections/>
     </div>
   );
 }

@@ -13,6 +13,7 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState({})
   const navigate = useNavigate();
 
   const refreshToken = async () => {
@@ -74,7 +75,18 @@ export const AuthProvider = ({ children }) => {
       const data = handleResponse(res, 200);  // Checking for 200 OK status
       setAuthTokens(data.access, data.refresh);
       setIsAuthenticated(true);
-      return data;
+      await getUserInformation();
+    } catch (error) {
+      console.error("Login error:", error);
+      throw new Error("Login failed. Please check your credentials.");
+    }
+  };
+
+  const getUserInformation = async () => {
+    try {
+      const res = await api.get("api/auth/me/");
+      const data = handleResponse(res, 200);
+      setUser(data);
     } catch (error) {
       console.error("Login error:", error);
       throw new Error("Login failed. Please check your credentials.");
@@ -105,7 +117,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ isAuthenticated, login, register, logout, loading, user }}>
       {!loading && children}
     </AuthContext.Provider>
   );

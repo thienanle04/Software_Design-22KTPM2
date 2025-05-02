@@ -12,6 +12,10 @@ import {
   UploadOutlined,
   DeleteOutlined,
   DownloadOutlined,
+  ShareAltOutlined,
+  GoogleOutlined,
+  FacebookOutlined,
+  TikTokOutlined,
 } from "@ant-design/icons";
 
 const { Text, Paragraph } = Typography;
@@ -19,7 +23,7 @@ const { Text, Paragraph } = Typography;
 const textHolder =
   "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
 
-const items = [
+const optionItems = [
   {
     label: "Download",
     key: "download",
@@ -31,6 +35,24 @@ const items = [
     icon: <DeleteOutlined />,
   },
 ];
+
+const shareItems = [
+  {
+    label: "Share with Youtube",
+    key: "google",
+    icon: <GoogleOutlined/>
+  },
+  {
+    label: "Share with Facebook",
+    key: "facebook",
+    icon: <FacebookOutlined/>
+  },
+  {
+    label: "Share with TikTok",
+    key: "tiktok",
+    icon: <TikTokOutlined/>
+  }
+]
 
 const VideoDetails = ({ video, visible, onClose, onRegenerate }) => {
   const [selectedPrompt, setSelectedPrompt] = useState(video?.prompt || "");
@@ -95,12 +117,23 @@ const VideoDetails = ({ video, visible, onClose, onRegenerate }) => {
             flex: 1,
           }}
         >
-          <div>
+          <Flex justify="end">
             <Dropdown
-              placement="botttoright"
+              placement="bottomRight"
               menu={{
-                items,
+                items: shareItems,
               }}
+              trigger={['click']}
+            >
+              <Button type="text" icon={<ShareAltOutlined />} />
+            </Dropdown>
+
+            <Dropdown
+              menu={{
+                items: optionItems,
+              }}
+              trigger={['click']}
+              placement="bottomRight"
             >
               <Button
                 type="text"
@@ -115,8 +148,10 @@ const VideoDetails = ({ video, visible, onClose, onRegenerate }) => {
                 }
               />
             </Dropdown>
-          </div>
+          </Flex>
+
           <Divider />
+
           <div
             style={{
               maxHeight: "calc(100vh - 400px)",

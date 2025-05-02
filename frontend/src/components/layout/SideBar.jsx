@@ -8,6 +8,7 @@ import {
   HomeOutlined,
   DashboardOutlined,
   LinkOutlined,
+  VideoCameraOutlined,
 } from "@ant-design/icons";
 import Logo from "/src/components/ui/Logo";
 
@@ -16,7 +17,7 @@ const { Sider } = Layout;
 const menuList = [
   {
     key: "/dashboard",
-    label: "Home",
+    label: "Dashboard",
     icon: <HomeOutlined />,
   },
   {
@@ -49,8 +50,13 @@ const tools = [
     link: "/dashboard/tools?tool=url-to-video",
     label: "URL To Video",
     icon: <LinkOutlined />,
-  }
-]
+  },
+  {
+    link: "",
+    label: "Video Editor",
+    icon: <VideoCameraOutlined />,
+  },
+];
 
 function SideBar() {
   const location = useLocation();
@@ -118,18 +124,26 @@ function SideBar() {
         items={menuList}
       />
 
-      {tools.map((tool) => (
-        <Button
-          type="text"
-          icon={tool.icon}
-          block
-          onClick={() => navigate(tool.link)}
-          style={{ margin: "4px", padding: "0px 16px 0px 24px", justifyContent: "start", height: "40px", width: "96%" }}
-          key={tool.link}
-        >
-          {tool.label}
-        </Button>
-      ))}
+      <div>
+        {tools.map((tool) => (
+          <Button
+            type="text"
+            icon={tool.icon}
+            block
+            onClick={() => navigate(tool.link)}
+            style={{
+              margin: "4px",
+              padding: "0px 16px 0px 24px",
+              justifyContent: "start",
+              height: "40px",
+              width: "96%",
+            }}
+            key={tool.link}
+          >
+            {tool.label}
+          </Button>
+        ))}
+      </div>
 
       {isMobile && (
         <Button

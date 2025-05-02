@@ -7,12 +7,14 @@ import {
   Avatar,
   Typography,
   Flex,
+  Dropdown
 } from "antd";
 import {
   LogoutOutlined,
   SearchOutlined,
   UserOutlined,
   LoginOutlined,
+  LinkOutlined
 } from "@ant-design/icons";
 import SideBar from "./SideBar";
 import { useAuth } from "/src/context/AuthContext";
@@ -20,12 +22,19 @@ import TopNav from "./TopNav";
 
 const { Header, Content, Footer } = Layout;
 
+const userFunctionsList = [
+  {
+    label: 'Social Media Connections',
+    key: '1',
+    icon: <LinkOutlined />,
+  },
+]
 const AppLayout = () => {
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
 
-  const { logout, isAuthenticated } = useAuth();
+  const { logout, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
 
   return (
@@ -47,11 +56,15 @@ const AppLayout = () => {
                   shape="circle"
                   onClick={() => console.log("Search clicked")}
                 />
-                <Avatar
+                <Dropdown menu={{ items: userFunctionsList }}>
+                  <Avatar
                   icon={<UserOutlined />}
                   style={{ backgroundColor: "#1890ff", alignSelf: "center" }}
-                />
-                <Typography.Text strong>thienanle04</Typography.Text>
+                  />
+                </Dropdown>
+                
+                <Typography.Text strong>{user.username}</Typography.Text>
+
                 <Button
                   icon={<LogoutOutlined />}
                   shape="circle"

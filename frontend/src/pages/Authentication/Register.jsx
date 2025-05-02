@@ -49,13 +49,14 @@ function Register() {
         placeholder="Username"
         style={{ marginBottom: 8 }}
       />
+
       <Input.Password
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         placeholder="Password"
       />
 
-      <Divider />
+      <Divider/>
 
       <Button block type="primary" onClick={handleSubmit}>
         Register

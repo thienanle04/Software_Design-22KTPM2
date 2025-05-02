@@ -13,6 +13,7 @@ import TextToVideo from "./pages/TextToVideo/TextToVideo";
 import Profile from "/src/pages/Profile/Profile";
 import { AuthProvider } from "/src/context/AuthContext";
 import "/src/styles/App.css";
+import OAuthCallback from "./callback/OAuthCallback";
 
 function RegisterAndLogout() {
   localStorage.clear();
@@ -47,6 +48,10 @@ function App() {
           <Route path="/" element={<HomeLayout />}>
             <Route index element={<Home />} />
           </Route>
+
+          <Route path="/oauth/:platform/callback"
+            element={<OAuthCallback/>}
+          />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

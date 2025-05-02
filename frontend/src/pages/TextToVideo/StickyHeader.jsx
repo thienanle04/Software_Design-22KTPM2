@@ -33,7 +33,7 @@ function StickyHeader({ tab, setTab }) {
         <Button
           type="text"
           icon={<ArrowLeftOutlined />}
-          onClick={() => navigate("/dashboard/")}
+          onClick={() => navigate("/dashboard")}
         />
         <Divider type="vertical" />
         <Text strong={true} style={{ fontSize: "20px", color: "#000" }}>

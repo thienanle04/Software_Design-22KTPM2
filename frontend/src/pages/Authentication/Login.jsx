@@ -14,26 +14,17 @@ function Login() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  
-  const openNotification = (message) => {
-    messageApi.open({
-      type: 'success',
-      content: message,
-    });
-  };
-  
   const notification = location.state?.notification || null;
   if (notification) {
     messageApi.success(notification, 2.5); // Show success message for 2.5 seconds
   }
-  
+
   const handleSubmit = async (e) => {
     setLoading(true);
     e.preventDefault();
 
     try {
-      const data = await login({ username, password });
-      openNotification();
+      await login({ username, password });
       navigate("/dashboard", { state: { notification: "Login successful!" } });
     } catch (error) {
       console.log(error);
@@ -51,10 +42,9 @@ function Login() {
     <>
       {contextHolder}
       <Modal open={true} onCancel={onClose} footer={[]}>
-        <Title level={4}>Login</Title>
-        <Paragraph>
-          Please enter your credentials to login to your account.
-        </Paragraph>
+        <Title level={4}>Welcome to VisoAI</Title>
+
+        <Divider style={{ borderColor: 'grey' }}>Or</Divider>
 
         <Input
           value={username}
@@ -66,9 +56,9 @@ function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
+          style={{ marginBottom: 8 }}
         />
 
-        <Divider />
         <Button block type="primary" onClick={handleSubmit}>
           Login
         </Button>
