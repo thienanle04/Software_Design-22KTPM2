@@ -38,60 +38,70 @@ const inspirations = [
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
     prompt: "A beautiful sunset over the mountains",
     script: "A beautiful sunset over the mountains",
+    images: [], // No images for inspiration videos
   },
   {
     id: "insp_2",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
     prompt: "A serene beach with waves crashing",
     script: "A serene beach with waves crashing",
+    images: [],
   },
   {
     id: "insp_3",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
     prompt: "A bustling city street at night",
     script: "A bustling city street at night",
+    images: [],
   },
   {
     id: "insp_4",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
     prompt: "A tranquil forest with birds chirping",
     script: "A tranquil forest with birds chirping",
+    images: [],
   },
   {
     id: "insp_5",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4",
     prompt: "A vibrant city skyline at dusk",
     script: "A vibrant city skyline at dusk",
+    images: [],
   },
   {
     id: "insp_6",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
     prompt: "A snowy mountain peak under a clear sky",
     script: "A snowy mountain peak under a clear sky",
+    images: [],
   },
   {
     id: "insp_7",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
     prompt: "A colorful garden filled with blooming flowers",
     script: "A colorful garden filled with blooming flowers",
+    images: [],
   },
   {
     id: "insp_8",
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
     prompt: "A peaceful lake surrounded by trees",
     script: "A peaceful lake surrounded by trees",
+    images: [],
   },
   {
     id: "insp_9",
     url: "https://www.w3schools.com/html/mov_bbb.mp4",
     prompt: "A beautiful sunset over the mountains",
     script: "A beautiful sunset over the mountains",
+    images: [],
   },
 ];
 
 const TextToVideo = () => {
   const { authLoading } = useAuth();
-  const [selectedVideo, setSelectedVideo] = useState(null);
+  const [selectedVideoId, setSelectedVideoId] = useState(null);
+  const [videoData, setVideoData] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [tab, setTab] = useState("My Creations");
@@ -130,7 +140,7 @@ const TextToVideo = () => {
           return;
         }
         let response = await fetch("http://127.0.0.1:8000/api/image-video/user-videos/", {
-          method: "GET",
+          
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`,
@@ -139,7 +149,7 @@ const TextToVideo = () => {
         if (response.status === 401) {
           token = await refreshToken();
           response = await fetch("http://127.0.0.1:8000/api/image-video/user-videos/", {
-            method: "GET",
+            
             headers: {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${token}`,
@@ -154,6 +164,7 @@ const TextToVideo = () => {
               url: `data:video/mp4;base64,${video.video_base64}`,
               prompt: video.prompt,
               script: video.prompt,
+              image_ids: video.image_ids || []
             }))
           );
         } else {
@@ -169,6 +180,65 @@ const TextToVideo = () => {
     }
   }, [authLoading, messageApi]);
 
+  // Fetch selected video data
+  useEffect(() => {
+    if (selectedVideoId && !selectedVideoId.toString().startsWith("insp_")) {
+      const fetchVideoData = async () => {
+        try {
+          let token = localStorage.getItem(ACCESS_TOKEN);
+          if (!token) {
+            messageApi.error("Authentication token missing.");
+            return;
+          }
+          const response = await fetch(`http://127.0.0.1:8000/api/image-video/video/${selectedVideoId}/`, {
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
+          if (response.status === 401) {
+            token = await refreshToken();
+            const retryResponse = await fetch(`http://127.0.0.1:8000/api/image-video/video/${selectedVideoId}/`, {
+              headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            });
+            if (!retryResponse.ok) throw new Error("Failed to fetch video data.");
+            const data = await retryResponse.json();
+            setVideoData({
+              id: data.id,
+              url: `data:video/mp4;base64,${data.video_base64}`,
+              prompt: data.prompt,
+              script: data.prompt,
+              image_ids: data.images.map(img => img.id),
+            });
+          } else if (!response.ok) {
+            throw new Error("Failed to fetch video data.");
+          } else {
+            const data = await response.json();
+            setVideoData({
+              id: data.id,
+              url: `data:video/mp4;base64,${data.video_base64}`,
+              prompt: data.prompt,
+              script: data.prompt,
+              image_ids: data.images.map(img => img.id),
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching video data:", error);
+          messageApi.error("Failed to load video data: " + error.message);
+        }
+      };
+      fetchVideoData();
+    } else if (selectedVideoId && selectedVideoId.toString().startsWith("insp_")) {
+      const inspVideo = inspirationList.find(v => v.id === selectedVideoId);
+      setVideoData(inspVideo);
+    } else {
+      setVideoData(null);
+    }
+  }, [selectedVideoId, messageApi]);
+
   // Handle prompt from location state
   useEffect(() => {
     if (location.state && location.state.prompt) {
@@ -178,7 +248,8 @@ const TextToVideo = () => {
 
   const closeModal = () => {
     setModalVisible(false);
-    setSelectedVideo(null);
+    setSelectedVideoId(null);
+    setVideoData(null);
   };
 
   // Handle video save/download
@@ -227,7 +298,8 @@ const TextToVideo = () => {
       if (response.ok) {
         setVideoList(mycreationList.filter((video) => video.id !== videoId));
         setModalVisible(false);
-        setSelectedVideo(null);
+        setSelectedVideoId(null);
+        setVideoData(null);
         messageApi.success("Video deleted successfully!");
       } else {
         const data = await response.json();
@@ -358,6 +430,7 @@ const TextToVideo = () => {
           url: `data:video/mp4;base64,${videoData.video_base64}`,
           prompt: videoData.prompt,
           script: videoData.prompt,
+          image_ids: [], // Will be updated on next fetch
         };
         setGeneratedVideo(newVideo.url);
         setVideoList([newVideo, ...mycreationList]);
@@ -401,7 +474,7 @@ const TextToVideo = () => {
             <VideoList
               videos={mycreationList}
               onVideoClick={(video) => {
-                setSelectedVideo(video);
+                setSelectedVideoId(video.id);
                 setModalVisible(true);
               }}
             />
@@ -412,7 +485,7 @@ const TextToVideo = () => {
           <VideoList
             videos={inspirationList}
             onVideoClick={(video) => {
-              setSelectedVideo(video);
+              setSelectedVideoId(video.id);
               setModalVisible(true);
             }}
           />
@@ -426,9 +499,9 @@ const TextToVideo = () => {
         loading={loading}
       />
 
-      {selectedVideo && (
+      {videoData && (
         <VideoDetails
-          video={selectedVideo}
+          video={videoData}
           visible={modalVisible}
           onClose={closeModal}
           onRegenerate={handleGenerate}

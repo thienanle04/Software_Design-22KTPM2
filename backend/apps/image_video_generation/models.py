@@ -29,3 +29,11 @@ class Video(models.Model):
 
     def __str__(self):
         return f"Video by {self.user.username} ({self.resolution}, {self.created_at})"
+
+class VideoImage(models.Model):
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='images')
+    image_base64 = models.TextField()  # Store base64-encoded image
+    order = models.PositiveIntegerField()  # Order of the image in the video
+
+    def __str__(self):
+        return f"Image {self.order} for Video {self.video.id}"
