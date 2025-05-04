@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { Button, Input, Flex, Image, Spin, message, Select } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 
@@ -33,6 +33,45 @@ function UserInputSection({
   const styleOptions = ["Realistic", "Cartoon", "Abstract", "Painting"];
   const resolutionOptions = ["512x512", "1024x1024", "1280x720"];
 
+  const scrollRef = useRef(null);
+  const [isDown, setIsDown] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  
+  useEffect(() => {
+    const slider = scrollRef.current;
+    if (!slider) return;
+  
+    const handleMouseDown = (e) => {
+      setIsDown(true);
+      setStartX(e.pageX - slider.offsetLeft);
+      setScrollLeft(slider.scrollLeft);
+    };
+  
+    const handleMouseLeave = () => setIsDown(false);
+    const handleMouseUp = () => setIsDown(false);
+  
+    const handleMouseMove = (e) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - slider.offsetLeft;
+      const walk = (x - startX) * 2; // drag speed multiplier
+      slider.scrollLeft = scrollLeft - walk;
+    };
+  
+    slider.addEventListener("mousedown", handleMouseDown);
+    slider.addEventListener("mouseleave", handleMouseLeave);
+    slider.addEventListener("mouseup", handleMouseUp);
+    slider.addEventListener("mousemove", handleMouseMove);
+  
+    return () => {
+      slider.removeEventListener("mousedown", handleMouseDown);
+      slider.removeEventListener("mouseleave", handleMouseLeave);
+      slider.removeEventListener("mouseup", handleMouseUp);
+      slider.removeEventListener("mousemove", handleMouseMove);
+    };
+  }, [isDown, startX, scrollLeft]);
+  
   return (
     <Flex
       vertical
@@ -75,12 +114,15 @@ function UserInputSection({
           </Flex>
           <Flex
             gap={16}
+            ref={scrollRef}
             style={{
               width: "100%",
               minWidth: "1008px", // 4 * 240px + 3 * 16px gap
               overflowX: "auto",
               padding: "8px 0",
               whiteSpace: "nowrap",
+              cursor: isDown ? "grabbing" : "grab",
+              userSelect: "none",
             }}
             className="hide-scrollbar"
           >
