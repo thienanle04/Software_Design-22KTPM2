@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Input, Button, Typography, Flex, message, Upload, Select, Card } from "antd";
-import { FaDice, FaLink, FaPaperclip, FaUserFriends } from "react-icons/fa";
+import { FaDice, FaPaperclip, FaUserFriends } from "react-icons/fa";
 
 const { Title, Paragraph } = Typography;
 const { Option } = Select;
@@ -25,10 +25,8 @@ function GenerateButtonIcon() {
 
 function Dashboard() {
   const [prompt, setPrompt] = useState("");
-  const [url, setUrl] = useState("");
   const [fileList, setFileList] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("text");
   const [audience, setAudience] = useState("general");
   const navigate = useNavigate();
   const location = useLocation();
@@ -72,26 +70,15 @@ function Dashboard() {
   };
 
   const handleGenerate = async () => {
-    if (activeTab === "text" && !prompt.trim()) {
+    if (!prompt.trim()) {
       messageApi.warning("Please enter a prompt");
-      return;
-    }
-
-    if (activeTab === "url" && !url.trim()) {
-      messageApi.warning("Please enter a URL");
       return;
     }
 
     setLoading(true);
 
     const formData = new FormData();
-
-    if (activeTab === "text") {
-      formData.append("content", prompt);
-    } else {
-      formData.append("url", url);
-    }
-
+    formData.append("content", prompt);
     formData.append("audience", audience);
 
     fileList.forEach(file => {
@@ -144,55 +131,22 @@ function Dashboard() {
         marginBottom: 24,
         color: "#4a5568"
       }}>
-        Transform your input into engaging content tailored for your audience
+        Transform your text into engaging videos
       </Paragraph>
 
       <div style={{ marginBottom: 24 }}>
-        <Flex gap="small" style={{ marginBottom: 16 }}>
-          <Button
-            type={activeTab === "text" ? "primary" : "default"}
-            onClick={() => setActiveTab("text")}
-            icon={<FaDice />}
-          >
-            Text Input
-          </Button>
-          <Button
-            type={activeTab === "url" ? "primary" : "default"}
-            onClick={() => setActiveTab("url")}
-            icon={<FaLink />}
-          >
-            URL Input
-          </Button>
-        </Flex>
-
-        {activeTab === "text" ? (
-          <Input.TextArea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Enter your content here..."
-            autoSize={{ minRows: 4, maxRows: 6 }}
-            style={{
-              borderRadius: "8px",
-              background: "#fff",
-              fontSize: "16px",
-              marginBottom: 16,
-            }}
-          />
-        ) : (
-          <Input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://example.com"
-            style={{
-              borderRadius: "8px",
-              height: "50px",
-              background: "#fff",
-              fontSize: "16px",
-              marginBottom: 16,
-            }}
-            prefix={<FaLink style={{ color: "rgba(0, 0, 0, 0.25)" }} />}
-          />
-        )}
+        <Input.TextArea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Enter your content here..."
+          autoSize={{ minRows: 4, maxRows: 6 }}
+          style={{
+            borderRadius: "8px",
+            background: "#fff",
+            fontSize: "16px",
+            marginBottom: 16,
+          }}
+        />
 
         <Flex gap={16} style={{ marginBottom: 16 }}>
           <Select
@@ -264,7 +218,7 @@ function Dashboard() {
         onClick={handleGenerate}
         loading={loading}
       >
-        Generate Content
+        Generate Video from Text
       </Button>
     </Card>
   );

@@ -52,7 +52,7 @@ const tools = [
     icon: <LinkOutlined />,
   },
   {
-    link: "",
+    link: "/dashboard/tools?tool=video-editor",
     label: "Video Editor",
     icon: <VideoCameraOutlined />,
   },
