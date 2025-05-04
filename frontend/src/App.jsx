@@ -50,7 +50,7 @@ function App() {
           </Route>
 
           <Route path="/oauth/:platform/callback"
-            element={<OAuthCallback/>}
+            element={<OAuthCallback />}
           />
 
           <Route path="*" element={<NotFound />} />
