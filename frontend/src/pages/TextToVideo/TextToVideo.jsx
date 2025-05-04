@@ -111,7 +111,11 @@ const TextToVideo = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [generatedImages, setGeneratedImages] = useState([]);
   const [generatedVideo, setGeneratedVideo] = useState(null);
+  const [style, setStyle] = useState("Realistic");
+  const [resolution, setResolution] = useState("1024x1024");
 
   // Refresh token on 401 error
   const refreshToken = async () => {
@@ -329,24 +333,15 @@ const TextToVideo = () => {
     return new File([blob], filename, { type: "image/png" });
   };
 
-  // Handle video generation
-  const handleGenerate = async () => {
-    console.log("handleGenerate called with prompt:", prompt);
-    if (!prompt.trim()) {
-      messageApi.error("Please enter a prompt.");
-      return;
-    }
-
-    setLoading(true);
-
+  // Handle image generation
+  const generateImages = async () => {
     try {
       let token = localStorage.getItem(ACCESS_TOKEN);
       if (!token) {
-        messageApi.error("Authentication token missing. Please log in again.");
-        return;
+        throw new Error("Authentication token missing. Please log in again.");
       }
 
-      // Step 1: Generate images from the prompt
+      setImageLoading(true);
       let imageResponse = await fetch("http://127.0.0.1:8000/api/image-video/generate-images/", {
         method: "POST",
         headers: {
@@ -355,8 +350,8 @@ const TextToVideo = () => {
         },
         body: JSON.stringify({
           story: prompt,
-          style: "realistic",
-          resolution: "1024x1024",
+          style: style.toLowerCase(),
+          resolution: resolution,
           aspect_ratio: "16:9",
         }),
       });
@@ -371,8 +366,8 @@ const TextToVideo = () => {
           },
           body: JSON.stringify({
             story: prompt,
-            style: "realistic",
-            resolution: "1024x1024",
+            style: style.toLowerCase(),
+            resolution: resolution,
             aspect_ratio: "16:9",
           }),
         });
@@ -383,68 +378,112 @@ const TextToVideo = () => {
       if (!imageResponse.ok) {
         throw new Error(imageData.error || "Failed to generate images.");
       }
-      if (!imageData.images_data || !Array.isArray(imageData.images_data) || imageData.images_data.length < 2) {
-        throw new Error("Invalid or insufficient images returned from server.");
+      if (!imageData.images_data || !Array.isArray(imageData.images_data)) {
+        throw new Error("Invalid images returned from server.");
       }
 
-      // Convert base64 images to File objects
-      const imageFiles = imageData.images_data
-        .filter(img => img)
-        .map((base64, index) => base64ToFile(base64, `image_${index}.png`));
-
-      if (imageFiles.length < 2) {
+      const validImages = imageData.images_data.filter((img) => img);
+      if (validImages.length < 2) {
         throw new Error("Not enough valid images generated (minimum 2 required).");
       }
 
-      // Step 2: Create video from generated images
-      const formData = new FormData();
-      imageFiles.forEach((file) => formData.append("images", file));
-      formData.append("fps", 24);
-      formData.append("duration", 2.0);
-      formData.append("transition_duration", 1.0);
-      formData.append("prompt", prompt);
+      setGeneratedImages(validImages);
+      messageApi.success("Images generated successfully!");
+    } catch (error) {
+      console.error("Error during image generation:", error);
+      messageApi.error(error.message || "Failed to generate images.");
+    } finally {
+      setImageLoading(false);
+    }
+  };
 
-      let videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-        body: formData,
-      });
+  // Handle video generation
+  const handleGenerate = async () => {
+    console.log("handleGenerate called with prompt:", prompt);
+    if (!prompt.trim()) {
+      messageApi.error("Please enter a prompt.");
+      return;
+    }
 
-      if (videoResponse.status === 401) {
-        token = await refreshToken();
-        videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
+    if (generatedImages.length === 0) {
+      // Step 1: Generate images
+      await generateImages();
+    } else {
+      // Step 2: Generate video from images
+      try {
+        let token = localStorage.getItem(ACCESS_TOKEN);
+        if (!token) {
+          throw new Error("Authentication token missing. Please log in again.");
+        }
+
+        setLoading(true);
+        const imageFiles = generatedImages
+          .filter((img) => img)
+          .map((base64, index) => base64ToFile(base64, `image_${index}.png`));
+
+        if (imageFiles.length < 2) {
+          throw new Error("Not enough valid images to generate video (minimum 2 required).");
+        }
+
+        const formData = new FormData();
+        imageFiles.forEach((file) => formData.append("images", file));
+        formData.append("fps", 24);
+        formData.append("duration", 2.0);
+        formData.append("transition_duration", 1.0);
+        formData.append("prompt", prompt);
+
+        let videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${token}`,
           },
           body: formData,
         });
-      }
 
-      const videoData = await videoResponse.json();
-      if (videoResponse.ok && videoData.video_base64) {
-        const newVideo = {
-          id: videoData.video_id,
-          url: `data:video/mp4;base64,${videoData.video_base64}`,
-          prompt: videoData.prompt,
-          script: videoData.prompt,
-          image_ids: [], // Will be updated on next fetch
-        };
-        setGeneratedVideo(newVideo.url);
-        setVideoList([newVideo, ...mycreationList]);
-        messageApi.success("Video generated and saved successfully!");
-        closeModal();
-      } else {
-        throw new Error(videoData.error || "Video generation failed.");
+        if (videoResponse.status === 401) {
+          token = await refreshToken();
+          videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+            },
+            body: formData,
+          });
+        }
+
+        const videoData = await videoResponse.json();
+        if (videoResponse.ok && videoData.video_base64) {
+          const newVideo = {
+            id: videoData.video_id,
+            url: `data:video/mp4;base64,${videoData.video_base64}`,
+            prompt: videoData.prompt,
+            script: videoData.prompt,
+            image_ids: [],
+          };
+          setGeneratedVideo(newVideo.url);
+          setVideoList([newVideo, ...mycreationList]);
+          setGeneratedImages([]); // Clear images after video generation
+          messageApi.success("Video generated and saved successfully!");
+          closeModal();
+        } else {
+          throw new Error(videoData.error || "Video generation failed.");
+        }
+      } catch (error) {
+        console.error("Error during video generation:", error);
+        messageApi.error(error.message || "Failed to generate video.");
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error during generation:", error);
-      messageApi.error(error.message || "Failed to generate video.");
-    } finally {
-      setLoading(false);
     }
+  };
+
+  // Handle image refresh
+  const handleRefreshImages = async () => {
+    if (!prompt.trim()) {
+      messageApi.error("No prompt available to refresh images.");
+      return;
+    }
+    await generateImages();
   };
 
   if (authLoading) {
@@ -496,7 +535,14 @@ const TextToVideo = () => {
         prompt={prompt}
         onPromptChange={(e) => setPrompt(e.target.value)}
         onGenerate={handleGenerate}
+        onRefresh={handleRefreshImages}
         loading={loading}
+        imageLoading={imageLoading}
+        generatedImages={generatedImages}
+        style={style}
+        setStyle={setStyle}
+        resolution={resolution}
+        setResolution={setResolution}
       />
 
       {videoData && (
