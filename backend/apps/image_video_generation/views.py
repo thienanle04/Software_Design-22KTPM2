@@ -63,6 +63,11 @@ def generate_image(request):
 
         logger.info(f"API response received: {response}")
 
+        # Check if response is valid
+        if not response.candidates or not response.candidates[0].content:
+            logger.error(f"No valid content in response: {response}")
+            return JsonResponse({'error': 'No image content returned by API'}, status=500)
+
         # Extract image data
         image_data = None
         for part in response.candidates[0].content.parts:
@@ -135,6 +140,11 @@ def generate_images_from_story(request):
                 )
             )
 
+            # Check if response is valid
+            if not response.candidates or not response.candidates[0].content:
+                logger.error(f"No valid content in response: {response}")
+                return JsonResponse({'error': 'No image content returned by API'}, status=500)
+
             # Extract image data
             image_data = None
             for part in response.candidates[0].content.parts:
@@ -162,6 +172,8 @@ def generate_images_from_story(request):
                 images_data.append(image_base64)
             else:
                 images_data.append(None)  # Or handle error as you prefer
+                logger.error(f"Image generation failed. Response: {response}")
+                return JsonResponse({'error': 'Image generation failed or no image in response.'}, status=500)
 
         return JsonResponse({
             'images_data': images_data,
