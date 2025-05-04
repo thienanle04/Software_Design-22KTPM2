@@ -145,20 +145,34 @@ class ContentProcessor:
             return "[Error] No scientific content provided."
 
         prompt = f"""
-    Please turn the following scientific content into a {style} story in the {genre} genre:
+You are a professional narrator and science storyteller. Turn the following scientific content into a vivid, structured, third-person story — told **only by a narrator** — in the **{style}** style and **{genre}** genre, suitable for **video and audio generation**.
 
-    --- ORIGINAL CONTENT ---
-    {final_content}
+--- ORIGINAL SCIENTIFIC CONTENT ---
+{final_content}
 
-    --- REQUIREMENTS ---
-    1. STORY PART (80%):
-    - Characters use scientific knowledge to solve a problem
-    - Include natural dialogue, avoid dry theory
+--- STRUCTURE ---
+Break the story into clearly numbered scenes like this:
 
-    2. EXPLANATION PART (20%):
-    - Use the heading "THE SCIENCE BEHIND"
-    - Explain the science using metaphors or easy-to-understand comparisons
-    """
+### SCENE 1: [Short summary of the scene]
+- **Narration (Third-person, no characters)**: Describe the scene in vivid, cinematic language. Focus on how the world changes, what is happening, and how science is involved. No dialogue or character names — just storytelling.
+- **Visual Description**: Describe what visuals should appear in this scene (e.g., swirling galaxies, a drop of water falling into a leaf, industrial robots assembling parts).
+- **Sound Effects / Music (optional)**: Suggest fitting background audio (e.g., gentle wind, deep rumble, uplifting orchestral music).
+
+... Continue with SCENE 2, SCENE 3, etc.
+
+### FINAL SECTION: THE SCIENCE BEHIND
+- Under this heading, explain the scientific concepts presented in the story.
+- Use simple metaphors or real-life comparisons to make them easy to understand.
+- Keep it engaging and accessible to a general audience.
+
+--- STYLE GUIDE ---
+- Use only third-person narration. Do not include any characters or dialogues.
+- Each scene should be 100–150 words (enough for ~30–60 seconds of audio).
+- Language should be **cinematic, sensory, and suitable for narration**.
+- Output in **English**.
+
+Now begin the story.
+"""
 
         try:
             model = genai.GenerativeModel('gemini-1.5-pro-latest')
