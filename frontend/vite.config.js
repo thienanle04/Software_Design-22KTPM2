@@ -1,7 +1,21 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    exclude: [
+      '@ffmpeg/ffmpeg',
+      '@ffmpeg/util'
+    ],
+    // Thêm cấu hình esbuild option nếu cần
+    esbuildOptions: {
+      loader: {
+        '.js': 'jsx'
+      }
+    }
+  },
+  worker: {
+    format: 'es'
+  }
 })

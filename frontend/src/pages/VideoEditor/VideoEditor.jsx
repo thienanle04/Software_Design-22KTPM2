@@ -1,218 +1,236 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Button, Input, Typography, Flex, message, Upload, Select, Card } from "antd";
-import { FaLink, FaPaperclip, FaUserFriends } from "react-icons/fa";
+import React, { useState, useEffect, useRef } from 'react';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
-const { Title, Paragraph } = Typography;
-const { Option } = Select;
+const VideoEditor = () => {
+    const [videoFile, setVideoFile] = useState(null);
+    const [audioFile, setAudioFile] = useState(null);
+    const [outputUrl, setOutputUrl] = useState(null);
+    const [progress, setProgress] = useState(0);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [error, setError] = useState(null);
+    const ffmpegRef = useRef(null);
+    const videoRef = useRef(null);
 
-function GenerateButtonIcon() {
-    return (
-        <svg
-            className="size-4"
-            width="17"
-            height="16"
-            fill="none"
-            viewBox="0 0 17 16"
-        >
-            <path
-                fill="currentColor"
-                d="M6.154 6.513c.429-.096.763-.43.86-.859l.665-2.995c.195-.879 1.447-.879 1.642 0l.666 2.995c.096.429.43.763.858.86l2.996.665c.879.195.879 1.447 0 1.642l-2.995.666c-.429.096-.763.43-.86.858l-.665 2.996c-.195.879-1.447.879-1.642 0l-.666-2.995a1.134 1.134 0 0 0-.859-.86L3.16 8.822c-.879-.195-.879-1.447 0-1.642l2.995-.666Z"
-            ></path>
-        </svg>
-    );
-}
+    // Khởi tạo FFmpeg
+    useEffect(() => {
+        const loadFFmpeg = async () => {
+            try {
+                const coreURL = await toBlobURL(
+                    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
+                    'text/javascript'
+                );
+                const wasmURL = await toBlobURL(
+                    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm',
+                    'application/wasm'
+                );
 
-function URLToVideo() {
-    const [url, setUrl] = useState("");
-    const [fileList, setFileList] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [audience, setAudience] = useState("general");
-    const navigate = useNavigate();
-    const [messageApi, contextHolder] = message.useMessage();
+                const ffmpeg = new FFmpeg({
+                    corePath: coreURL,
+                    wasmPath: wasmURL,
+                    log: true,
+                });
 
-    const beforeUpload = (file) => {
-        const isAllowedType = [
-            'text/plain',
-            'application/pdf',
-            'image/png',
-            'image/jpeg',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        ].includes(file.type);
+                await ffmpeg.load();
+                ffmpeg.on('progress', ({ progress: p }) => {
+                    setProgress(Math.round(p * 100));
+                });
 
-        if (!isAllowedType) {
-            messageApi.error('You can only upload text, PDF, image, or Word files!');
-            return false;
-        }
+                ffmpegRef.current = ffmpeg;
+                console.log('FFmpeg loaded successfully');
+            } catch (err) {
+                console.error('Failed to load FFmpeg:', err);
+                setError('Failed to initialize video editor. Please refresh the page or try again later.');
+            }
+        };
 
-        const isLt5M = file.size / 1024 / 1024 < 5;
-        if (!isLt5M) {
-            messageApi.error('File must smaller than 5MB!');
-            return false;
-        }
+        loadFFmpeg();
 
-        return true;
+        return () => {
+            if (outputUrl) {
+                URL.revokeObjectURL(outputUrl);
+            }
+        };
+    }, [outputUrl]);
+
+    const handleVideoChange = (e) => {
+        setVideoFile(e.target.files[0]);
+        setError(null);
     };
 
-    const handleUploadChange = ({ fileList }) => {
-        setFileList(fileList);
+    const handleAudioChange = (e) => {
+        setAudioFile(e.target.files[0]);
+        setError(null);
     };
 
-    const handleGenerate = async () => {
-        if (!url.trim()) {
-            messageApi.warning("Please enter a URL");
+    const mergeVideoAudio = async () => {
+        if (!videoFile || !audioFile) {
+            setError('Please select both video and audio files');
             return;
         }
 
-        setLoading(true);
-
-        const formData = new FormData();
-        formData.append("url", url);
-        formData.append("audience", audience);
-
-        fileList.forEach(file => {
-            formData.append("files", file.originFileObj);
-        });
-
         try {
-            const response = await fetch("http://127.0.0.1:8000/api/gen_script/simplified-science/", {
-                method: "POST",
-                body: formData,
-            });
+            setIsProcessing(true);
+            setError(null);
+            setOutputUrl(null);
+            setProgress(0);
 
-            const data = await response.json();
-            console.log("API Response:", data.simplified_explanation);
+            const ffmpeg = ffmpegRef.current;
 
-            if (!response.ok) {
-                throw new Error(data.error || "Failed to generate simplified explanation");
-            }
+            await ffmpeg.writeFile('input.mp4', await fetchFile(videoFile));
+            await ffmpeg.writeFile('audio.mp3', await fetchFile(audioFile));
 
-            navigate("/dashboard/tools/text-to-video", {
-                state: {
-                    prompt: data.simplified_explanation
-                }
-            });
+            await ffmpeg.exec([
+                '-i', 'input.mp4',
+                '-i', 'audio.mp3',
+                '-c:v', 'copy',
+                '-c:a', 'aac',
+                '-map', '0:v:0',
+                '-map', '1:a:0',
+                '-shortest',
+                'output.mp4',
+            ]);
 
-        } catch (error) {
-            console.error("API Error:", error);
-            messageApi.error(error.message || "Failed to process your request");
+            const data = await ffmpeg.readFile('output.mp4');
+            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+            setOutputUrl(url);
+        } catch (err) {
+            console.error('Merge error:', err);
+            setError(`Error: ${err.message}. Please try different files.`);
         } finally {
-            setLoading(false);
+            setIsProcessing(false);
         }
     };
 
     return (
-        <Card
-            style={{
-                padding: "24px",
-                background: "linear-gradient(to right, rgb(186, 213, 254), rgb(224, 187, 236))",
-                borderRadius: "12px",
-                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-            }}
-        >
-            {contextHolder}
-            <Title level={2} style={{ textAlign: "center", marginBottom: 8, color: "#2d3748" }}>
-                URL to Video
-            </Title>
-            <Paragraph style={{
-                fontSize: "16px",
-                textAlign: "center",
-                marginBottom: 24,
-                color: "#4a5568"
-            }}>
-                Convert web content into engaging videos
-            </Paragraph>
+        <div style={styles.container}>
+            <h1 style={styles.header}>Video Editor</h1>
 
-            <div style={{ marginBottom: 24 }}>
-                <Input
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://example.com"
-                    style={{
-                        borderRadius: "8px",
-                        height: "50px",
-                        background: "#fff",
-                        fontSize: "16px",
-                        marginBottom: 16,
-                    }}
-                    prefix={<FaLink style={{ color: "rgba(0, 0, 0, 0.25)" }} />}
-                />
+            {error && <div style={styles.error}>{error}</div>}
 
-                <Flex gap={16} style={{ marginBottom: 16 }}>
-                    <Select
-                        style={{ width: "100%" }}
-                        value={audience}
-                        onChange={setAudience}
-                        placeholder="Select audience"
-                        optionLabelProp="label"
-                        suffixIcon={<FaUserFriends />}
-                    >
-                        <Option value="children" label="Children">
-                            <div style={{ display: "flex", alignItems: "center" }}>
-                                <span role="img" aria-label="children">👶</span>
-                                <span style={{ marginLeft: 8 }}>Children</span>
-                            </div>
-                        </Option>
-                        <Option value="teenagers" label="Teenagers">
-                            <div style={{ display: "flex", alignItems: "center" }}>
-                                <span role="img" aria-label="teenagers">🧒</span>
-                                <span style={{ marginLeft: 8 }}>Teenagers</span>
-                            </div>
-                        </Option>
-                        <Option value="general" label="General">
-                            <div style={{ display: "flex", alignItems: "center" }}>
-                                <span role="img" aria-label="general">👥</span>
-                                <span style={{ marginLeft: 8 }}>General</span>
-                            </div>
-                        </Option>
-                        <Option value="professionals" label="Professionals">
-                            <div style={{ display: "flex", alignItems: "center" }}>
-                                <span role="img" aria-label="professionals">👔</span>
-                                <span style={{ marginLeft: 8 }}>Professionals</span>
-                            </div>
-                        </Option>
-                        <Option value="academic" label="Academic">
-                            <div style={{ display: "flex", alignItems: "center" }}>
-                                <span role="img" aria-label="academic">🎓</span>
-                                <span style={{ marginLeft: 8 }}>Academic</span>
-                            </div>
-                        </Option>
-                    </Select>
-                </Flex>
+            <div style={styles.inputGroup}>
+                <div style={styles.inputContainer}>
+                    <label style={styles.label}>Select Video:</label>
+                    <input
+                        type="file"
+                        accept="*"
+                        onChange={handleVideoChange}
+                        disabled={isProcessing}
+                        style={styles.input}
+                    />
+                </div>
 
-                <Upload
-                    multiple
-                    beforeUpload={beforeUpload}
-                    onChange={handleUploadChange}
-                    fileList={fileList}
-                    showUploadList={{ showPreviewIcon: true, showRemoveIcon: true }}
-                    style={{ marginBottom: 16 }}
-                >
-                    <Button icon={<FaPaperclip />} style={{ width: "100%" }}>
-                        Attach Files (PDF, Word, Images)
-                    </Button>
-                </Upload>
+                <div style={styles.inputContainer}>
+                    <label style={styles.label}>Select Audio:</label>
+                    <input
+                        type="file"
+                        accept="audio/*"
+                        onChange={handleAudioChange}
+                        disabled={isProcessing}
+                        style={styles.input}
+                    />
+                </div>
             </div>
 
-            <Button
-                type="primary"
-                size="large"
+            <button
                 style={{
-                    height: "50px",
-                    backgroundColor: "#6a58b5",
-                    borderRadius: "8px",
-                    fontSize: "18px",
-                    width: "100%",
+                    ...styles.button,
+                    ...(isProcessing || !videoFile || !audioFile ? styles.buttonDisabled : {}),
                 }}
-                icon={<GenerateButtonIcon />}
-                onClick={handleGenerate}
-                loading={loading}
+                onClick={mergeVideoAudio}
+                disabled={isProcessing || !videoFile || !audioFile}
             >
-                Generate Video from URL
-            </Button>
-        </Card>
-    );
-}
+                {isProcessing ? `Processing... ${progress}%` : 'Merge Video & Audio'}
+            </button>
 
-export default URLToVideo;
+            {outputUrl && (
+                <div style={styles.resultContainer}>
+                    <h3 style={styles.subHeader}>Result:</h3>
+                    <video ref={videoRef} src={outputUrl} controls style={styles.video} />
+                    <a href={outputUrl} download="merged_video.mp4" style={styles.downloadButton}>
+                        Download Result
+                    </a>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const styles = {
+    container: {
+        maxWidth: '800px',
+        margin: '0 auto',
+        padding: '20px',
+        fontFamily: 'Arial, sans-serif',
+    },
+    header: {
+        color: '#333',
+        textAlign: 'center',
+    },
+    error: {
+        color: '#ff4444',
+        backgroundColor: '#ffeeee',
+        padding: '10px',
+        borderRadius: '4px',
+        marginBottom: '15px',
+    },
+    inputGroup: {
+        display: 'flex',
+        gap: '20px',
+        marginBottom: '20px',
+        flexWrap: 'wrap',
+    },
+    inputContainer: {
+        flex: '1',
+        minWidth: '250px',
+    },
+    label: {
+        display: 'block',
+        marginBottom: '5px',
+        fontWeight: 'bold',
+    },
+    input: {
+        width: '100%',
+        padding: '8px',
+    },
+    button: {
+        backgroundColor: '#4CAF50',
+        color: 'white',
+        border: 'none',
+        padding: '10px 20px',
+        fontSize: '16px',
+        cursor: 'pointer',
+        borderRadius: '4px',
+        transition: 'background-color 0.3s',
+        width: '100%',
+    },
+    buttonDisabled: {
+        backgroundColor: '#cccccc',
+        cursor: 'not-allowed',
+    },
+    resultContainer: {
+        marginTop: '30px',
+        borderTop: '1px solid #eee',
+        paddingTop: '20px',
+    },
+    subHeader: {
+        color: '#333',
+    },
+    video: {
+        width: '100%',
+        maxHeight: '500px',
+        backgroundColor: '#000',
+        margin: '15px 0',
+    },
+    downloadButton: {
+        display: 'inline-block',
+        backgroundColor: '#2196F3',
+        color: 'white',
+        padding: '10px 15px',
+        textDecoration: 'none',
+        borderRadius: '4px',
+        transition: 'background-color 0.3s',
+    },
+};
+
+export default VideoEditor;
