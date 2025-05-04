@@ -9,4 +9,6 @@ urlpatterns = [
     path('create-video-from-images/', views.create_video_from_images, name='create_video_from_images'),
     path('user-videos/', views.UserVideosView.as_view(), name='user_videos'),
     path('delete-video/<int:video_id>/', views.delete_video, name='delete_video'),
+    path('video/<int:video_id>/', views.get_video, name='get_video'),
+    path('image/<int:image_id>/', views.get_image, name='get_image'),
 ]

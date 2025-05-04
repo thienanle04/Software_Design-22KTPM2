@@ -17,6 +17,7 @@ import {
   FacebookOutlined,
   TikTokOutlined,
 } from "@ant-design/icons";
+import ImageDetails from "./ImageDetails";
 
 const { Text, Paragraph } = Typography;
 
@@ -31,6 +32,31 @@ const VideoDetails = ({
   loading,
 }) => {
   const isUserVideo = video?.id && !video.id.toString().startsWith("insp_"); // Check if it's a user video (not inspiration)
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [sound, setSound] = useState(null);
+
+  const handleMenuClick = ({ key }) => {
+    if (key === "download") {
+      onSave(video.url);
+    } else if (key === "delete" && isUserVideo) {
+      onDelete(video.id);
+    }
+  };
+
+  const handlePromptClick = () => {
+    onPromptSelect(video.prompt);
+    onClose(); // Close modal after selecting prompt
+  };
+
+  const handleImageClick = () => {
+    console.log("Image button clicked, opening ImageDetails modal");
+    setShowImageModal(true);
+  };
+
+  const handleRecreate = () => {
+    onRegenerate(video.prompt);
+    onClose(); // Close modal after recreating
+  };
 
   const optionItems = [
     {
@@ -38,11 +64,11 @@ const VideoDetails = ({
       key: "download",
       icon: <DownloadOutlined />,
     },
-    {
+    ...(isUserVideo ? [{
       label: "Delete",
       key: "delete",
       icon: <DeleteOutlined />,
-    },
+    }] : []),
   ];
 
   const shareItems = [
@@ -63,46 +89,8 @@ const VideoDetails = ({
     },
   ];
 
-  const [selectedPrompt, setSelectedPrompt] = useState(video?.prompt || "");
-  const [selectedImage, setSelectedImage] = useState(video?.image || "");
-  const [sound, setSound] = useState(null);
-
-  const handleRecreate = () => {
-    onRegenerate(selectedPrompt, selectedImage, sound);
-    onClose();
-  };
-
-  const handleMenuClick = ({ key }) => {
-    if (key === "download") {
-      onSave(video.url);
-    } else if (key === "delete" && isUserVideo) {
-      onDelete(video.id);
-    }
-  };
-
-  const items = [
-    {
-      label: "Download",
-      key: "download",
-      icon: <DownloadOutlined />,
-    },
-    ...(isUserVideo
-      ? [
-          {
-            label: "Delete",
-            key: "delete",
-            icon: <DeleteOutlined />,
-          },
-        ]
-      : []),
-  ];
-
-  // const handleRecreate = () => {
-  //   onRegenerate(selectedPrompt, selectedImage, sound);
-  //   onClose();
-  // };
-
   return (
+  <>
     <Modal
       open={visible}
       onCancel={onClose}
@@ -136,7 +124,8 @@ const VideoDetails = ({
           <video
             style={{
               width: "100%",
-              height: "100%",
+              height: "auto",
+              borderRadius: "10px",
             }}
             src={video?.url}
             autoPlay
@@ -165,24 +154,22 @@ const VideoDetails = ({
             >
               <Button type="text" icon={<ShareAltOutlined />} />
             </Dropdown>
-
             <Dropdown
+              placement="bottomRight"
               menu={{
                 items: optionItems,
+                onClick: handleMenuClick,
               }}
               trigger={["click"]}
-              placement="bottomRight"
             >
               <Button
                 type="text"
                 icon={
-                  <>
-                    <img
-                      src="/src/assets/settings-icon.svg"
-                      alt="Settings Icon"
-                      style={{ width: 16, height: 16 }}
-                    />
-                  </>
+                  <img
+                    src="/src/assets/settings-icon.svg"
+                    alt="Settings Icon"
+                    style={{ width: 16, height: 16 }}
+                  />
                 }
               />
             </Dropdown>
@@ -205,21 +192,10 @@ const VideoDetails = ({
                   borderRadius: 4,
                   cursor: "pointer",
                 }}
-                onClick={() => onPromptSelect(video.prompt)}
+                onClick={handlePromptClick}
               >
                 {video?.prompt || "No prompt available"}
               </Paragraph>
-
-              {/* <Text strong>Image</Text>
-              <img
-                src={selectedImage || video.image}
-                alt="Selected"
-                style={{
-                  width: "100%",
-                  height: "auto",
-                  borderRadius: 4,
-                }}
-              /> */}
             </Space>
           </div>
           <Space style={{ width: "100%" }} direction="vertical">
@@ -230,22 +206,21 @@ const VideoDetails = ({
             <Flex justify="space-between" gap={8}>
               <Button
                 style={{ flex: 1 }}
-                onClick={() => onPromptSelect(video.prompt)}
+                onClick={handlePromptClick}
               >
                 Prompt
               </Button>
               <Button
                 style={{ flex: 1 }}
-                onClick={() => setSelectedImage(video.image)}
+                onClick={handleImageClick}
               >
                 Image
               </Button>
             </Flex>
-
             {isUserVideo && (
               <Button
                 type="primary"
-                onClick={onRegenerate}
+                onClick={handleRecreate}
                 style={{ width: "100%" }}
                 loading={loading}
               >
@@ -256,6 +231,16 @@ const VideoDetails = ({
         </div>
       </Flex>
     </Modal>
+    
+    {isUserVideo && (
+      <ImageDetails
+        video={video}
+        visible={showImageModal}
+        onClose={() => setShowImageModal(false)}
+        onPromptSelect={onPromptSelect}
+      />
+    )}
+  </>
   );
 };
 
