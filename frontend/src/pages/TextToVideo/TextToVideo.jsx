@@ -38,7 +38,7 @@ const inspirations = [
     url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
     prompt: "A beautiful sunset over the mountains",
     script: "A beautiful sunset over the mountains",
-    images: [], // No images for inspiration videos
+    images: [],
   },
   {
     id: "insp_2",
@@ -116,6 +116,7 @@ const TextToVideo = () => {
   const [generatedVideo, setGeneratedVideo] = useState(null);
   const [style, setStyle] = useState("Realistic");
   const [resolution, setResolution] = useState("1024x1024");
+  const [storyLoading, setStoryLoading] = useState(false);
 
   // Refresh token on 401 error
   const refreshToken = async () => {
@@ -144,7 +145,6 @@ const TextToVideo = () => {
           return;
         }
         let response = await fetch("http://127.0.0.1:8000/api/image-video/user-videos/", {
-          
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`,
@@ -153,7 +153,6 @@ const TextToVideo = () => {
         if (response.status === 401) {
           token = await refreshToken();
           response = await fetch("http://127.0.0.1:8000/api/image-video/user-videos/", {
-            
             headers: {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${token}`,
@@ -168,7 +167,7 @@ const TextToVideo = () => {
               url: `data:video/mp4;base64,${video.video_base64}`,
               prompt: video.prompt,
               script: video.prompt,
-              image_ids: video.image_ids || []
+              image_ids: video.image_ids || [],
             }))
           );
         } else {
@@ -215,7 +214,7 @@ const TextToVideo = () => {
               url: `data:video/mp4;base64,${data.video_base64}`,
               prompt: data.prompt,
               script: data.prompt,
-              image_ids: data.images.map(img => img.id),
+              image_ids: data.images.map((img) => img.id),
             });
           } else if (!response.ok) {
             throw new Error("Failed to fetch video data.");
@@ -226,7 +225,7 @@ const TextToVideo = () => {
               url: `data:video/mp4;base64,${data.video_base64}`,
               prompt: data.prompt,
               script: data.prompt,
-              image_ids: data.images.map(img => img.id),
+              image_ids: data.images.map((img) => img.id),
             });
           }
         } catch (error) {
@@ -236,7 +235,7 @@ const TextToVideo = () => {
       };
       fetchVideoData();
     } else if (selectedVideoId && selectedVideoId.toString().startsWith("insp_")) {
-      const inspVideo = inspirationList.find(v => v.id === selectedVideoId);
+      const inspVideo = inspirationList.find((v) => v.id === selectedVideoId);
       setVideoData(inspVideo);
     } else {
       setVideoData(null);
@@ -249,6 +248,84 @@ const TextToVideo = () => {
       setPrompt(location.state.prompt);
     }
   }, [location.state]);
+
+  // Fetch science story and extract visual descriptions
+  const fetchScienceStory = async (simplifiedPrompt) => {
+    setStoryLoading(true);
+    try {
+      let token = localStorage.getItem(ACCESS_TOKEN);
+      if (!token) {
+        messageApi.error("Authentication token missing.");
+        return simplifiedPrompt;
+      }
+
+      const response = await fetch("http://127.0.0.1:8000/api/gen_script/science-stories/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          content: simplifiedPrompt,
+          style: "adventure",
+        }),
+      });
+
+      if (response.status === 401) {
+        token = await refreshToken();
+        const retryResponse = await fetch("http://127.0.0.1:8000/api/gen_script/science-stories/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            content: simplifiedPrompt,
+            style: "adventure",
+          }),
+        });
+        if (!retryResponse.ok) throw new Error("Failed to generate science story.");
+        const data = await retryResponse.json();
+        console.log("Science story response:", data);
+        return processStory(data.story, simplifiedPrompt);
+      } else if (!response.ok) {
+        throw new Error("Failed to generate science story.");
+      } else {
+        const data = await response.json();
+        console.log("Science story response:", data);
+        return processStory(data.story, simplifiedPrompt);
+      }
+    } catch (error) {
+      console.error("Error fetching science story:", error);
+      messageApi.error("Failed to generate science story: " + error.message);
+      return simplifiedPrompt; // Fallback to simplified prompt
+    } finally {
+      setStoryLoading(false);
+    }
+  };
+
+  // Extract Visual Descriptions from story
+  const processStory = (story, simplifiedPrompt) => {
+    const visualDescRegex = /- \*\*Visual Description\*\*: (.*?)(?=\n- \*\*Sound Effects \/ Music\*\*:|\n\n|### SCENE|\n### FINAL SECTION|$)/gs;
+    const visualDescriptions = [];
+    let match;
+    while ((match = visualDescRegex.exec(story)) !== null) {
+      visualDescriptions.push(match[1].trim());
+    }
+  
+    if (visualDescriptions.length > 0) {
+      const combinedPrompt = visualDescriptions.join("\n");
+      setPrompt(combinedPrompt);
+      setStoryLoading(false);
+      return combinedPrompt;
+    } else {
+      messageApi.warning("No visual descriptions found in story. Using simplified prompt.");
+      setPrompt(simplifiedPrompt);
+      setStoryLoading(false);
+      return simplifiedPrompt;
+    }
+    
+  };
 
   const closeModal = () => {
     setModalVisible(false);
@@ -342,6 +419,13 @@ const TextToVideo = () => {
       }
 
       setImageLoading(true);
+
+      // Fetch science story if coming from Dashboard
+      let finalPrompt = prompt;
+      if (location.state && location.state.prompt) {
+        finalPrompt = await fetchScienceStory(prompt);
+      }
+
       let imageResponse = await fetch("http://127.0.0.1:8000/api/image-video/generate-images/", {
         method: "POST",
         headers: {
@@ -349,7 +433,7 @@ const TextToVideo = () => {
           "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
-          story: prompt,
+          story: finalPrompt,
           style: style.toLowerCase(),
           resolution: resolution,
           aspect_ratio: "16:9",
@@ -365,7 +449,7 @@ const TextToVideo = () => {
             "Authorization": `Bearer ${token}`,
           },
           body: JSON.stringify({
-            story: prompt,
+            story: finalPrompt,
             style: style.toLowerCase(),
             resolution: resolution,
             aspect_ratio: "16:9",
@@ -397,11 +481,16 @@ const TextToVideo = () => {
     }
   };
 
-  // Handle video generation
+  // Handle generation (images and video)
   const handleGenerate = async () => {
     console.log("handleGenerate called with prompt:", prompt);
     if (!prompt.trim()) {
       messageApi.error("Please enter a prompt.");
+      return;
+    }
+
+    if (storyLoading) {
+      messageApi.warning("Please wait, generating story...");
       return;
     }
 
@@ -483,6 +572,10 @@ const TextToVideo = () => {
       messageApi.error("No prompt available to refresh images.");
       return;
     }
+    if (storyLoading) {
+      messageApi.warning("Please wait, generating story...");
+      return;
+    }
     await generateImages();
   };
 
@@ -538,6 +631,7 @@ const TextToVideo = () => {
         onRefresh={handleRefreshImages}
         loading={loading}
         imageLoading={imageLoading}
+        storyLoading={storyLoading}
         generatedImages={generatedImages}
         style={style}
         setStyle={setStyle}

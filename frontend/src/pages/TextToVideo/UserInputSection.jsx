@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { Button, Input, Flex, Image, Spin, message, Select } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 
@@ -12,6 +12,7 @@ function UserInputSection({
   onRefresh,
   loading,
   imageLoading,
+  storyLoading,
   generatedImages,
   style,
   setStyle,
@@ -33,6 +34,45 @@ function UserInputSection({
   const styleOptions = ["Realistic", "Cartoon", "Abstract", "Painting"];
   const resolutionOptions = ["512x512", "1024x1024", "1280x720"];
 
+  const scrollRef = useRef(null);
+  const [isDown, setIsDown] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  
+  useEffect(() => {
+    const slider = scrollRef.current;
+    if (!slider) return;
+  
+    const handleMouseDown = (e) => {
+      setIsDown(true);
+      setStartX(e.pageX - slider.offsetLeft);
+      setScrollLeft(slider.scrollLeft);
+    };
+  
+    const handleMouseLeave = () => setIsDown(false);
+    const handleMouseUp = () => setIsDown(false);
+  
+    const handleMouseMove = (e) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - slider.offsetLeft;
+      const walk = (x - startX) * 2; // drag speed multiplier
+      slider.scrollLeft = scrollLeft - walk;
+    };
+  
+    slider.addEventListener("mousedown", handleMouseDown);
+    slider.addEventListener("mouseleave", handleMouseLeave);
+    slider.addEventListener("mouseup", handleMouseUp);
+    slider.addEventListener("mousemove", handleMouseMove);
+  
+    return () => {
+      slider.removeEventListener("mousedown", handleMouseDown);
+      slider.removeEventListener("mouseleave", handleMouseLeave);
+      slider.removeEventListener("mouseup", handleMouseUp);
+      slider.removeEventListener("mousemove", handleMouseMove);
+    };
+  }, [isDown, startX, scrollLeft]);
+  
   return (
     <Flex
       vertical
@@ -61,6 +101,7 @@ function UserInputSection({
               type="text"
               icon={<ReloadOutlined />}
               onClick={onRefresh}
+              disabled={storyLoading}
               style={{
                 borderRadius: "50%",
                 width: "32px",
@@ -73,55 +114,96 @@ function UserInputSection({
               }}
             />
           </Flex>
-          <Flex
-            gap={16}
+          <div
+            ref={scrollRef}
             style={{
               width: "100%",
-              minWidth: "1008px", // 4 * 240px + 3 * 16px gap
               overflowX: "auto",
               padding: "8px 0",
               whiteSpace: "nowrap",
+              cursor: isDown ? "grabbing" : "grab",
+              userSelect: "none",
             }}
             className="hide-scrollbar"
           >
-            {generatedImages.map((img, index) =>
-              img ? (
-                <Image
-                  key={index}
-                  src={`data:image/png;base64,${img}`}
-                  alt={`Generated image ${index + 1}`}
-                  style={{
-                    width: "240px",
-                    height: "auto",
-                    borderRadius: "8px",
-                    border: "1px solid #e8e8e8",
-                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-                    display: "inline-block",
-                  }}
-                  preview={{
-                    mask: <div style={{ background: "rgba(0, 0, 0, 0.5)", color: "#fff" }}>View</div>,
-                  }}
-                />
-              ) : null
-            )}
-          </Flex>
+            <div
+              style={{
+                display: "flex",
+                gap: "16px",
+                flexWrap: "nowrap",
+              }}
+            >
+              {generatedImages.map((img, index) =>
+                img ? (
+                  <div
+                    key={index}
+                    style={{
+                      flex: "0 0 auto",
+                      width: "calc(25% - 12px)", // Adjusts for 4 per row max
+                      minWidth: "200px",
+                    }}
+                  >
+                    <Image
+                      src={`data:image/png;base64,${img}`}
+                      alt={`Generated image ${index + 1}`}
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        borderRadius: "8px",
+                        border: "1px solid #e8e8e8",
+                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                      }}
+                      preview={{
+                        mask: <div style={{ background: "rgba(0, 0, 0, 0.5)", color: "#fff" }}>View</div>,
+                      }}
+                    />
+                  </div>
+                ) : null
+              )}
+            </div>
+          </div>
         </Flex>
+
       ) : null}
 
-      <TextArea
-        value={prompt}
-        onChange={onPromptChange}
-        placeholder="Describe your video..."
-        style={{
-          borderRadius: "8px",
-          height: "50px",
-          fontSize: "16px",
-          width: "100%",
-          border: "0px",
-          outline: "2px solid rgb(255, 255, 255)",
-        }}
-        autoSize={{ minRows: 3, maxRows: 7 }}
-      />
+     {/* Prompt TextArea with story loading overlay */}
+     <div style={{ position: "relative", width: "100%" }}>
+        <TextArea
+          value={prompt}
+          onChange={onPromptChange}
+          placeholder="Describe your video..."
+          style={{
+            borderRadius: "8px",
+            height: "50px",
+            fontSize: "16px",
+            width: "100%",
+            border: "0px",
+            outline: "2px solid rgb(255, 255, 255)",
+            paddingRight: "40px",
+          }}
+          autoSize={{ minRows: 3, maxRows: 7 }}
+          disabled={storyLoading}
+        />
+        {storyLoading && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(255, 255, 255, 0.6)",
+              borderRadius: "8px",
+              zIndex: 1,
+            }}
+          >
+            <Spin tip="Generating story..." />
+          </div>
+        )}
+      </div>
 
       <Flex justify="space-between" align="center" style={{ width: "100%" }}>
         <Flex gap="middle">
@@ -134,6 +216,7 @@ function UserInputSection({
             }}
             className="button-select"
             placeholder="Select Style"
+            disabled={storyLoading}
           >
             {styleOptions.map((opt) => (
               <Option key={opt} value={opt}>
@@ -150,6 +233,7 @@ function UserInputSection({
             }}
             className="button-select"
             placeholder="Select Resolution"
+            disabled={storyLoading}
           >
             {resolutionOptions.map((opt) => (
               <Option key={opt} value={opt}>
@@ -168,6 +252,7 @@ function UserInputSection({
           }}
           onClick={handleGenerate}
           loading={loading || imageLoading}
+          disabled={storyLoading}
         >
           {generatedImages.length > 0 ? "Generate Video" : "Generate Images"}
         </Button>
