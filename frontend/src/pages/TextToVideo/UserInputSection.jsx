@@ -34,44 +34,6 @@ function UserInputSection({
   const styleOptions = ["Realistic", "Cartoon", "Abstract", "Painting"];
   const resolutionOptions = ["512x512", "1024x1024", "1280x720"];
 
-  const scrollRef = useRef(null);
-  const [isDown, setIsDown] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  
-  useEffect(() => {
-    const slider = scrollRef.current;
-    if (!slider) return;
-  
-    const handleMouseDown = (e) => {
-      setIsDown(true);
-      setStartX(e.pageX - slider.offsetLeft);
-      setScrollLeft(slider.scrollLeft);
-    };
-  
-    const handleMouseLeave = () => setIsDown(false);
-    const handleMouseUp = () => setIsDown(false);
-  
-    const handleMouseMove = (e) => {
-      if (!isDown) return;
-      e.preventDefault();
-      const x = e.pageX - slider.offsetLeft;
-      const walk = (x - startX) * 2; // drag speed multiplier
-      slider.scrollLeft = scrollLeft - walk;
-    };
-  
-    slider.addEventListener("mousedown", handleMouseDown);
-    slider.addEventListener("mouseleave", handleMouseLeave);
-    slider.addEventListener("mouseup", handleMouseUp);
-    slider.addEventListener("mousemove", handleMouseMove);
-  
-    return () => {
-      slider.removeEventListener("mousedown", handleMouseDown);
-      slider.removeEventListener("mouseleave", handleMouseLeave);
-      slider.removeEventListener("mouseup", handleMouseUp);
-      slider.removeEventListener("mousemove", handleMouseMove);
-    };
-  }, [isDown, startX, scrollLeft]);
   
   return (
     <Flex
@@ -115,16 +77,7 @@ function UserInputSection({
             />
           </Flex>
           <div
-            ref={scrollRef}
-            style={{
-              width: "100%",
-              overflowX: "auto",
-              padding: "8px 0",
-              whiteSpace: "nowrap",
-              cursor: isDown ? "grabbing" : "grab",
-              userSelect: "none",
-            }}
-            className="hide-scrollbar"
+            className="scroll-container"
           >
             <div
               style={{
@@ -274,12 +227,38 @@ function UserInputSection({
         .button-select .ant-select-arrow {
           color: #A56EFF !important;
         }
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
+        
+        /* Scroll container styles */
+        .scroll-container {
+          width: 100%;
+          overflow-x: auto;
+          padding: 8px 0;
+          white-space: nowrap;
         }
-        .hide-scrollbar {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
+        
+        /* Webkit scrollbar styles */
+        .scroll-container::-webkit-scrollbar {
+          height: 6px;
+        }
+        .scroll-container::-webkit-scrollbar-track {
+          background: transparent;
+          border-radius: 3px;
+        }
+        .scroll-container::-webkit-scrollbar-thumb {
+          background-color: rgba(0, 0, 0, 0.08);
+          border-radius: 3px;
+        }
+        .scroll-container::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(0, 0, 0, 0.12);
+        }
+        .scroll-container::-webkit-scrollbar-thumb:active {
+          background-color: rgba(0, 0, 0, 0.18);
+        }
+        
+        /* Firefox scrollbar styles */
+        .scroll-container {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
         }
       `}</style>
     </Flex>

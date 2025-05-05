@@ -316,12 +316,10 @@ const TextToVideo = () => {
     if (visualDescriptions.length > 0) {
       const combinedPrompt = visualDescriptions.join("\n");
       setPrompt(combinedPrompt);
-      setStoryLoading(false);
       return combinedPrompt;
     } else {
       messageApi.warning("No visual descriptions found in story. Using simplified prompt.");
       setPrompt(simplifiedPrompt);
-      setStoryLoading(false);
       return simplifiedPrompt;
     }
     
@@ -411,7 +409,7 @@ const TextToVideo = () => {
   };
 
   // Handle image generation
-  const generateImages = async () => {
+  const generateImages = async (finalPrompt) => {
     try {
       let token = localStorage.getItem(ACCESS_TOKEN);
       if (!token) {
@@ -419,12 +417,6 @@ const TextToVideo = () => {
       }
 
       setImageLoading(true);
-
-      // Fetch science story if coming from Dashboard
-      let finalPrompt = prompt;
-      if (location.state && location.state.prompt) {
-        finalPrompt = await fetchScienceStory(prompt);
-      }
 
       let imageResponse = await fetch("http://127.0.0.1:8000/api/image-video/generate-images/", {
         method: "POST",
@@ -495,8 +487,10 @@ const TextToVideo = () => {
     }
 
     if (generatedImages.length === 0) {
-      // Step 1: Generate images
-      await generateImages();
+      // Step 1: Fetch science story and generate images
+      const finalPrompt = await fetchScienceStory(prompt);
+      console.log("Proceeding to generate images with prompt:", finalPrompt);
+      await generateImages(finalPrompt);
     } else {
       // Step 2: Generate video from images
       try {
@@ -576,7 +570,7 @@ const TextToVideo = () => {
       messageApi.warning("Please wait, generating story...");
       return;
     }
-    await generateImages();
+    await generateImages(prompt);
   };
 
   if (authLoading) {
