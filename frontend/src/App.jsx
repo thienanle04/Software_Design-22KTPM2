@@ -10,6 +10,7 @@ import Analysis from "./pages/Analysis/Analysis";
 import ProtectedRoute from "/src/components/auth/ProtectedRoute";
 import Tools from "./pages/Tools/Tools";
 import TextToVideo from "./pages/TextToVideo/TextToVideo";
+import VideoEditor from "./pages/VideoEditor/VideoEditor";
 import Profile from "/src/pages/Profile/Profile";
 import { AuthProvider } from "/src/context/AuthContext";
 import "/src/styles/App.css";
@@ -43,6 +44,13 @@ function App() {
             element={<ProtectedRoute />}
           >
             <Route index element={<TextToVideo />} />
+          </Route>
+
+          <Route
+            path="dashboard/tools/video-editor"
+            element={<ProtectedRoute />}
+          >
+            <Route index element={<VideoEditor />} />
           </Route>
 
           <Route path="/" element={<HomeLayout />}>
