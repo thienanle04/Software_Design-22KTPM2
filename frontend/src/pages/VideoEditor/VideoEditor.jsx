@@ -166,6 +166,26 @@ const VideoEditor = () => {
         return () => audio.removeEventListener('timeupdate', handleTimeUpdate);
     }, [audioEnd]);
 
+    // Khi timeline video thay đổi
+    useEffect(() => {
+        if (previewVideoRef.current) {
+            previewVideoRef.current.currentTime = videoStart;
+            if (isVideoPlaying) {
+                previewVideoRef.current.play();
+            }
+        }
+    }, [videoStart, videoEnd]);
+
+    // Khi timeline audio thay đổi
+    useEffect(() => {
+        if (previewAudioRef.current) {
+            previewAudioRef.current.currentTime = audioStart;
+            if (isAudioPlaying) {
+                previewAudioRef.current.play();
+            }
+        }
+    }, [audioStart, audioEnd]);
+
     const mergeVideoAudio = async () => {
         if (!videoFile || !audioFile) {
             setError('Please select both video and audio files');
