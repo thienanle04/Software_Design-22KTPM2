@@ -2,33 +2,32 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import StickyHeader from './StickyHeader';
+import { Range } from 'react-range';
 
 const VideoEditor = () => {
-    const [videoFile, setVideoFile] = useState(null);
-    const [audioFile, setAudioFile] = useState(null);
-    const [outputUrl, setOutputUrl] = useState(null);
-    const [progress, setProgress] = useState(0);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [error, setError] = useState(null);
+    // State management
+    const [state, setState] = useState({
+        videoFile: null,
+        audioFile: null,
+        outputUrl: null,
+        progress: 0,
+        isProcessing: false,
+        error: null,
+        videoDuration: 0,
+        audioDuration: 0,
+        videoStart: 0,
+        videoEnd: 0,
+        audioStart: 0,
+        audioEnd: 0,
+        videoPreviewUrl: null,
+        audioPreviewUrl: null,
+        isVideoPlaying: false,
+        isAudioPlaying: false
+    });
+
     const ffmpegRef = useRef(null);
-    const videoRef = useRef(null);
-    const audioRef = useRef(null);
     const previewVideoRef = useRef(null);
     const previewAudioRef = useRef(null);
-
-    // Timeline states
-    const [videoDuration, setVideoDuration] = useState(0);
-    const [audioDuration, setAudioDuration] = useState(0);
-    const [videoStart, setVideoStart] = useState(0);
-    const [videoEnd, setVideoEnd] = useState(0);
-    const [audioStart, setAudioStart] = useState(0);
-    const [audioEnd, setAudioEnd] = useState(0);
-
-    // Preview states
-    const [videoPreviewUrl, setVideoPreviewUrl] = useState(null);
-    const [audioPreviewUrl, setAudioPreviewUrl] = useState(null);
-    const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-    const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
     // Initialize FFmpeg
     useEffect(() => {
@@ -48,330 +47,321 @@ const VideoEditor = () => {
                     wasmPath: wasmURL,
                     log: true,
                 });
-
                 await ffmpeg.load();
-                ffmpeg.on('progress', ({ progress: p }) => {
-                    setProgress(Math.round(p * 100));
+
+                ffmpeg.on('progress', ({ progress }) => {
+                    setState(prev => ({ ...prev, progress: Math.round(progress * 100) }));
                 });
 
                 ffmpegRef.current = ffmpeg;
-                console.log('FFmpeg loaded successfully');
             } catch (err) {
-                console.error('Failed to load FFmpeg:', err);
-                setError('Failed to initialize video editor. Please refresh the page or try again later.');
+                setState(prev => ({ ...prev, error: 'Failed to initialize FFmpeg' }));
             }
         };
 
         loadFFmpeg();
 
         return () => {
-            if (outputUrl) URL.revokeObjectURL(outputUrl);
-            if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
-            if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+            if (state.outputUrl) URL.revokeObjectURL(state.outputUrl);
+            if (state.videoPreviewUrl) URL.revokeObjectURL(state.videoPreviewUrl);
+            if (state.audioPreviewUrl) URL.revokeObjectURL(state.audioPreviewUrl);
         };
-    }, [outputUrl, videoPreviewUrl, audioPreviewUrl]);
+    }, []);
 
-    const handleVideoChange = (e) => {
+    // Handlers
+    const handleFileChange = async (type, e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        setVideoFile(file);
-        setError(null);
-
-        // Create preview URL
         const url = URL.createObjectURL(file);
-        setVideoPreviewUrl(url);
+        const mediaElement = type === 'video'
+            ? document.createElement('video')
+            : new Audio(url);
 
-        const video = document.createElement('video');
-        video.src = url;
-
-        video.onloadedmetadata = () => {
-            setVideoDuration(video.duration);
-            setVideoEnd(video.duration);
+        mediaElement.onloadedmetadata = () => {
+            setState(prev => ({
+                ...prev,
+                [`${type}File`]: file,
+                [`${type}PreviewUrl`]: url,
+                [`${type}Duration`]: mediaElement.duration,
+                [`${type}End`]: mediaElement.duration,
+                error: null
+            }));
         };
+
+        if (type === 'video') mediaElement.src = url;
     };
 
-    const handleAudioChange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+    const togglePlayback = (type) => {
+        const ref = type === 'video' ? previewVideoRef : previewAudioRef;
+        const isPlaying = state[`is${type.charAt(0).toUpperCase() + type.slice(1)}Playing`];
 
-        setAudioFile(file);
-        setError(null);
-
-        // Create preview URL
-        const url = URL.createObjectURL(file);
-        setAudioPreviewUrl(url);
-
-        const audio = new Audio(url);
-
-        audio.onloadedmetadata = () => {
-            setAudioDuration(audio.duration);
-            setAudioEnd(audio.duration);
-        };
-    };
-
-    const toggleVideoPlayback = () => {
-        if (previewVideoRef.current) {
-            if (isVideoPlaying) {
-                previewVideoRef.current.pause();
+        if (ref.current) {
+            if (isPlaying) {
+                ref.current.pause();
             } else {
-                previewVideoRef.current.currentTime = videoStart;
-                previewVideoRef.current.play();
+                ref.current.currentTime = state[`${type}Start`];
+                ref.current.play();
             }
-            setIsVideoPlaying(!isVideoPlaying);
+            setState(prev => ({ ...prev, [`is${type.charAt(0).toUpperCase() + type.slice(1)}Playing`]: !isPlaying }));
         }
     };
 
-    const toggleAudioPlayback = () => {
-        if (previewAudioRef.current) {
-            if (isAudioPlaying) {
-                previewAudioRef.current.pause();
-            } else {
-                previewAudioRef.current.currentTime = audioStart;
-                previewAudioRef.current.play();
-            }
-            setIsAudioPlaying(!isAudioPlaying);
-        }
-    };
-
-    // Handle when video reaches the end of the selected segment
+    // Timeline effects
     useEffect(() => {
-        const video = previewVideoRef.current;
-        if (!video) return;
-
-        const handleTimeUpdate = () => {
-            if (video.currentTime >= videoEnd) {
-                video.pause();
-                setIsVideoPlaying(false);
+        const handleTimeUpdate = (type) => () => {
+            const ref = type === 'video' ? previewVideoRef : previewAudioRef;
+            if (ref.current?.currentTime >= state[`${type}End`]) {
+                ref.current.pause();
+                setState(prev => ({ ...prev, [`is${type.charAt(0).toUpperCase() + type.slice(1)}Playing`]: false }));
             }
         };
 
-        video.addEventListener('timeupdate', handleTimeUpdate);
-        return () => video.removeEventListener('timeupdate', handleTimeUpdate);
-    }, [videoEnd]);
+        const videoListener = handleTimeUpdate('video');
+        const audioListener = handleTimeUpdate('audio');
 
-    // Handle when audio reaches the end of the selected segment
-    useEffect(() => {
-        const audio = previewAudioRef.current;
-        if (!audio) return;
+        previewVideoRef.current?.addEventListener('timeupdate', videoListener);
+        previewAudioRef.current?.addEventListener('timeupdate', audioListener);
 
-        const handleTimeUpdate = () => {
-            if (audio.currentTime >= audioEnd) {
-                audio.pause();
-                setIsAudioPlaying(false);
-            }
+        return () => {
+            previewVideoRef.current?.removeEventListener('timeupdate', videoListener);
+            previewAudioRef.current?.removeEventListener('timeupdate', audioListener);
         };
+    }, [state.videoEnd, state.audioEnd]);
 
-        audio.addEventListener('timeupdate', handleTimeUpdate);
-        return () => audio.removeEventListener('timeupdate', handleTimeUpdate);
-    }, [audioEnd]);
-
-    // Khi timeline video thay đổi
-    useEffect(() => {
-        if (previewVideoRef.current) {
-            previewVideoRef.current.currentTime = videoStart;
-            if (isVideoPlaying) {
-                previewVideoRef.current.play();
-            }
-        }
-    }, [videoStart, videoEnd]);
-
-    // Khi timeline audio thay đổi
-    useEffect(() => {
-        if (previewAudioRef.current) {
-            previewAudioRef.current.currentTime = audioStart;
-            if (isAudioPlaying) {
-                previewAudioRef.current.play();
-            }
-        }
-    }, [audioStart, audioEnd]);
-
-    const mergeVideoAudio = async () => {
-        if (!videoFile || !audioFile) {
-            setError('Please select both video and audio files');
-            return;
-        }
-
+    const mergeMedia = async () => {
         try {
-            setIsProcessing(true);
-            setError(null);
-            setOutputUrl(null);
-            setProgress(0);
+            setState(prev => ({ ...prev, isProcessing: true, error: null }));
 
+            const { videoFile, audioFile, videoStart, videoEnd, audioStart, audioEnd } = state;
             const ffmpeg = ffmpegRef.current;
 
-            await ffmpeg.writeFile('input.mp4', await fetchFile(videoFile));
-            await ffmpeg.writeFile('audio.mp3', await fetchFile(audioFile));
+            await Promise.all([
+                ffmpeg.writeFile('input.mp4', await fetchFile(videoFile)),
+                ffmpeg.writeFile('audio.mp3', await fetchFile(audioFile))
+            ]);
 
-            // Calculate durations
             const videoDuration = videoEnd - videoStart;
             const audioDuration = audioEnd - audioStart;
-            const finalDuration = Math.min(videoDuration, audioDuration);
+            const outputDuration = Math.max(videoDuration, audioDuration);
 
-            // Build FFmpeg command with trimming
-            const command = [
-                '-i', 'input.mp4',
-                '-i', 'audio.mp3',
-                // Trim video
+            await ffmpeg.exec([
+                // Input video with trimming
                 '-ss', videoStart.toString(),
-                '-t', finalDuration.toString(),
-                // Trim audio
-                '-filter_complex', `[1:a]atrim=start=${audioStart}:end=${audioEnd},asetpts=PTS-STARTPTS[a]`,
-                // Map streams
-                '-map', '0:v:0',
-                '-map', '[a]',
+                '-t', videoDuration.toString(),
+                '-i', 'input.mp4',
+
+                // Input audio with independent trimming
+                '-ss', audioStart.toString(),
+                '-t', audioDuration.toString(),
+                '-i', 'audio.mp3',
+
+                // Process audio (pad with silence if needed)
+                '-filter_complex',
+                `[1:a]apad=whole_dur=${outputDuration}[padded_audio]`,
+
+                // Combine streams
+                '-map', '0:v',
+                '-map', '[padded_audio]',
+
+                // Output settings
                 '-c:v', 'copy',
                 '-c:a', 'aac',
                 '-shortest',
                 'output.mp4'
-            ];
-
-            await ffmpeg.exec(command);
+            ]);
 
             const data = await ffmpeg.readFile('output.mp4');
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
-            setOutputUrl(url);
+
+            setState(prev => ({ ...prev, outputUrl: url }));
         } catch (err) {
-            console.error('Merge error:', err);
-            setError(`Error: ${err.message}. Please try different files or adjust the timeline.`);
+            setState(prev => ({ ...prev, error: err.message }));
         } finally {
-            setIsProcessing(false);
+            setState(prev => ({ ...prev, isProcessing: false }));
         }
     };
 
+    // Helper functions
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
+    const handleRangeChange = (type, values) => {
+        setState(prev => ({
+            ...prev,
+            [`${type}Start`]: values[0],
+            [`${type}End`]: values[1]
+        }));
+    };
+
+    // Render function for timeline
+    const renderTimeline = (type) => {
+        const duration = state[`${type}Duration`];
+        const start = state[`${type}Start`];
+        const end = state[`${type}End`];
+        const mediaRef = type === 'video' ? previewVideoRef : previewAudioRef;
+
+        const handleStartChange = (newStart) => {
+            setState(prev => ({
+                ...prev,
+                [`${type}Start`]: newStart
+            }));
+
+            // Cập nhật preview khi thay đổi điểm bắt đầu
+            if (mediaRef.current) {
+                mediaRef.current.currentTime = newStart;
+                if (state[`is${type.charAt(0).toUpperCase() + type.slice(1)}Playing`]) {
+                    mediaRef.current.play();
+                }
+            }
+        };
+
+        const handleEndChange = (newEnd) => {
+            setState(prev => ({
+                ...prev,
+                [`${type}End`]: newEnd
+            }));
+
+            // Dừng phát nếu đang vượt quá điểm kết thúc mới
+            if (mediaRef.current && mediaRef.current.currentTime > newEnd) {
+                mediaRef.current.pause();
+                setState(prev => ({
+                    ...prev,
+                    [`is${type.charAt(0).toUpperCase() + type.slice(1)}Playing`]: false
+                }));
+            }
+        };
+
+        const handleRangeChange = (values) => {
+            const [newStart, newEnd] = values;
+            handleStartChange(newStart);
+            handleEndChange(newEnd);
+        };
+
+        return (
+            <div style={styles.timelineContainer}>
+                <div style={styles.timelineHeader}>
+                    <span>Start: {formatTime(start)}</span>
+                    <span style={styles.durationText}>Duration: {formatTime(end - start)}</span>
+                    <span>End: {formatTime(end)}</span>
+                </div>
+
+                <Range
+                    step={0.1}
+                    min={0}
+                    max={duration}
+                    values={[start, end]}
+                    onChange={handleRangeChange}
+                    renderTrack={({ props: trackProps, children }) => {
+                        const { key, ...restTrackProps } = trackProps;
+                        return (
+                            <div
+                                key={key}
+                                {...restTrackProps}
+                                style={{ ...restTrackProps.style, ...styles.timelineTrack }}
+                            >
+                                {children}
+                            </div>
+                        );
+                    }}
+                    renderThumb={({ props: thumbProps, isDragged }) => {
+                        const { key, ...restThumbProps } = thumbProps;
+                        return (
+                            <div
+                                key={key}
+                                {...restThumbProps}
+                                style={{
+                                    ...restThumbProps.style,
+                                    ...styles.timelineThumb,
+                                    ...(isDragged ? styles.thumbDragging : {})
+                                }}
+                            />
+                        );
+                    }}
+                />
+            </div>
+        );
+    };
+
     return (
         <div>
-            {/* StickyHeader ở đây */}
             <StickyHeader title="Video Editor" />
 
-            {/* Container chính - thêm padding top để tránh bị header che */}
-            <div style={{ ...styles.container, paddingTop: '120px' }}>
-                {error && <div style={styles.error}>{error}</div>}
+            <div style={styles.container}>
+                {state.error && <div style={styles.error}>{state.error}</div>}
 
                 <div style={styles.inputGroup}>
+                    {/* Video Input */}
                     <div style={styles.inputContainer}>
                         <label style={styles.label}>Select Video:</label>
                         <input
                             type="file"
                             accept="video/*"
-                            onChange={handleVideoChange}
-                            disabled={isProcessing}
+                            onChange={(e) => handleFileChange('video', e)}
+                            disabled={state.isProcessing}
                             style={styles.input}
                         />
-                        {videoPreviewUrl && (
-                            <div style={styles.previewContainer}>
+
+                        {state.videoPreviewUrl && (
+                            <>
                                 <video
                                     ref={previewVideoRef}
-                                    src={videoPreviewUrl}
+                                    src={state.videoPreviewUrl}
                                     controls={false}
                                     style={styles.previewVideo}
-                                    onClick={toggleVideoPlayback}
+                                    onClick={() => togglePlayback('video')}
                                 />
                                 <div style={styles.previewControls}>
                                     <button
-                                        onClick={toggleVideoPlayback}
+                                        onClick={() => togglePlayback('video')}
                                         style={styles.playButton}
                                     >
-                                        {isVideoPlaying ? 'Pause' : 'Play'}
+                                        {state.isVideoPlaying ? 'Pause' : 'Play'}
                                     </button>
                                     <span style={styles.previewTime}>
-                                        {formatTime(videoStart)} - {formatTime(videoEnd)}
+                                        {formatTime(state.videoStart)} - {formatTime(state.videoEnd)}
                                     </span>
                                 </div>
-                                <div style={styles.timelineContainer}>
-                                    <div style={styles.timelineHeader}>
-                                        <span>Start: {formatTime(videoStart)}</span>
-                                        <span style={styles.durationText}>Duration: {formatTime(videoEnd - videoStart)}</span>
-                                        <span>End: {formatTime(videoEnd)}</span>
-                                    </div>
-                                    <div style={styles.timelineControls}>
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max={videoDuration}
-                                            step="0.1"
-                                            value={videoStart}
-                                            onChange={(e) => setVideoStart(parseFloat(e.target.value))}
-                                            style={styles.timelineInput}
-                                        />
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max={videoDuration}
-                                            step="0.1"
-                                            value={videoEnd}
-                                            onChange={(e) => setVideoEnd(parseFloat(e.target.value))}
-                                            style={styles.timelineInput}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                                {renderTimeline('video')}
+                            </>
                         )}
                     </div>
 
+                    {/* Audio Input */}
                     <div style={styles.inputContainer}>
                         <label style={styles.label}>Select Audio:</label>
                         <input
                             type="file"
                             accept="audio/*"
-                            onChange={handleAudioChange}
-                            disabled={isProcessing}
+                            onChange={(e) => handleFileChange('audio', e)}
+                            disabled={state.isProcessing}
                             style={styles.input}
                         />
-                        {audioPreviewUrl && (
+
+                        {state.audioPreviewUrl && (
                             <div style={styles.previewContainer}>
                                 <div style={styles.audioWaveform}>
                                     <span style={styles.audioLabel}>Audio Track</span>
                                 </div>
                                 <div style={styles.previewControls}>
                                     <button
-                                        onClick={toggleAudioPlayback}
+                                        onClick={() => togglePlayback('audio')}
                                         style={styles.playButton}
                                     >
-                                        {isAudioPlaying ? 'Pause' : 'Play'}
+                                        {state.isAudioPlaying ? 'Pause' : 'Play'}
                                     </button>
                                     <span style={styles.previewTime}>
-                                        {formatTime(audioStart)} - {formatTime(audioEnd)}
+                                        {formatTime(state.audioStart)} - {formatTime(state.audioEnd)}
                                     </span>
                                 </div>
                                 <audio
                                     ref={previewAudioRef}
-                                    src={audioPreviewUrl}
-                                    onEnded={() => setIsAudioPlaying(false)}
+                                    src={state.audioPreviewUrl}
                                 />
-                                <div style={styles.timelineContainer}>
-                                    <div style={styles.timelineHeader}>
-                                        <span>Start: {formatTime(audioStart)}</span>
-                                        <span style={styles.durationText}>Duration: {formatTime(audioEnd - audioStart)}</span>
-                                        <span>End: {formatTime(audioEnd)}</span>
-                                    </div>
-                                    <div style={styles.timelineControls}>
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max={audioDuration}
-                                            step="0.1"
-                                            value={audioStart}
-                                            onChange={(e) => setAudioStart(parseFloat(e.target.value))}
-                                            style={styles.timelineInput}
-                                        />
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max={audioDuration}
-                                            step="0.1"
-                                            value={audioEnd}
-                                            onChange={(e) => setAudioEnd(parseFloat(e.target.value))}
-                                            style={styles.timelineInput}
-                                        />
-                                    </div>
-                                </div>
+                                {renderTimeline('audio')}
                             </div>
                         )}
                     </div>
@@ -380,19 +370,27 @@ const VideoEditor = () => {
                 <button
                     style={{
                         ...styles.button,
-                        ...(isProcessing || !videoFile || !audioFile ? styles.buttonDisabled : {}),
+                        ...((state.isProcessing || !state.videoFile || !state.audioFile) ? styles.buttonDisabled : {})
                     }}
-                    onClick={mergeVideoAudio}
-                    disabled={isProcessing || !videoFile || !audioFile}
+                    onClick={mergeMedia}
+                    disabled={state.isProcessing || !state.videoFile || !state.audioFile}
                 >
-                    {isProcessing ? `Processing... ${progress}%` : 'Merge Video & Audio'}
+                    {state.isProcessing ? `Processing... ${state.progress}%` : 'Merge Video & Audio'}
                 </button>
 
-                {outputUrl && (
+                {state.outputUrl && (
                     <div style={styles.resultContainer}>
                         <h3 style={styles.subHeader}>Result:</h3>
-                        <video ref={videoRef} src={outputUrl} controls style={styles.video} />
-                        <a href={outputUrl} download="merged_video.mp4" style={styles.downloadButton}>
+                        <video
+                            src={state.outputUrl}
+                            controls
+                            style={styles.video}
+                        />
+                        <a
+                            href={state.outputUrl}
+                            download="merged_video.mp4"
+                            style={styles.downloadButton}
+                        >
                             Download Result
                         </a>
                     </div>
@@ -402,17 +400,13 @@ const VideoEditor = () => {
     );
 };
 
+// Styles (optimized version)
 const styles = {
     container: {
         maxWidth: '800px',
         margin: '0 auto',
-        padding: '20px',
-        fontFamily: 'Arial, sans-serif',
-        paddingTop: '120px',
-    },
-    header: {
-        color: '#333',
-        textAlign: 'center',
+        padding: '20px 20px 120px',
+        fontFamily: 'Arial, sans-serif'
     },
     error: {
         color: '#ff4444',
@@ -451,6 +445,7 @@ const styles = {
         borderRadius: '4px',
         transition: 'background-color 0.3s',
         width: '100%',
+        marginTop: '20px'
     },
     buttonDisabled: {
         backgroundColor: '#cccccc',
@@ -463,6 +458,7 @@ const styles = {
     },
     subHeader: {
         color: '#333',
+        marginBottom: '15px'
     },
     video: {
         width: '100%',
@@ -478,6 +474,7 @@ const styles = {
         textDecoration: 'none',
         borderRadius: '4px',
         transition: 'background-color 0.3s',
+        marginTop: '10px'
     },
     timelineContainer: {
         marginTop: '10px',
@@ -489,19 +486,23 @@ const styles = {
         display: 'flex',
         justifyContent: 'space-between',
         marginBottom: '10px',
-        alignItems: 'center',
+        fontSize: '14px'
     },
     durationText: {
         fontWeight: 'bold',
-        color: '#333',
     },
-    timelineControls: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-    },
-    timelineInput: {
+    timelineTrack: {
+        height: '6px',
         width: '100%',
+        backgroundColor: '#ddd',
+        borderRadius: '3px',
+    },
+    timelineThumb: {
+        height: '16px',
+        width: '16px',
+        backgroundColor: '#4285f4',
+        borderRadius: '50%',
+        outline: 'none'
     },
     previewContainer: {
         marginTop: '10px',
@@ -531,7 +532,7 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         gap: '10px',
-        marginBottom: '10px',
+        margin: '10px 0',
     },
     playButton: {
         backgroundColor: '#2196F3',
@@ -540,6 +541,7 @@ const styles = {
         padding: '5px 10px',
         borderRadius: '4px',
         cursor: 'pointer',
+        fontSize: '14px'
     },
     previewTime: {
         color: '#666',
