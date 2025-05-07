@@ -1,0 +1,12 @@
+# Ignore Django database 
+db.sqlite3 
+*.sqlite3 
+# Ignore media files 
+media/ 
+# Ignore audio output 
+*.mp3 
+# Ignore Python cache 
+__pycache__/ 
+*.pyc 
+# Ignore env 
+.env 
