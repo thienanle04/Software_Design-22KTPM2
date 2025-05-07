@@ -312,17 +312,21 @@ def create_video_from_images(request):
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
     try:
-        # Get parameters
         image_files = request.FILES.getlist('images')
         fps = int(request.POST.get('fps', 24))
-        duration_per_image = float(request.POST.get('duration', 2.0))
+        durations = json.loads(request.POST.get('durations', '[]'))
         transition_duration = float(request.POST.get('transition_duration', 1.0))
         prompt = request.POST.get('prompt', '')  # Get prompt from request
-        
+
         if len(image_files) < 2:
             return JsonResponse({'error': 'At least 2 images are required'}, status=400)
-        
-        # Set resolution
+        if not durations:
+            return JsonResponse({'error': 'Durations list is required'}, status=400)
+        if len(durations) != len(image_files):
+            return JsonResponse({'error': 'Number of durations must match number of images'}, status=400)
+        if not all(isinstance(d, (int, float)) and d > 0 for d in durations):
+            return JsonResponse({'error': 'All durations must be positive numbers'}, status=400)
+
         base_width, base_height = None, None
         if resolution := request.POST.get('resolution'):
             base_width, base_height = map(int, resolution.split('x'))
@@ -347,39 +351,27 @@ def create_video_from_images(request):
         # Create temporary directory for storing processed frames
         with tempfile.TemporaryDirectory() as temp_dir:
             clips = []
-       
+            effect_duration = 5.0 # Max duration for zoom effect
             # Process each image and create clips
-            for i, img_file in enumerate(image_files):
-                # Create a unique subdirectory for each image's frames
+
+            for i, (img_file, duration) in enumerate(zip(image_files, durations)):
                 img_dir = os.path.join(temp_dir, f"img_{i}")
                 os.makedirs(img_dir)
-                
-                # Adjusted duration for overlap
-                adjusted_duration = duration_per_image + transition_duration if i < len(image_files) - 1 else duration_per_image
-                num_frames = int(fps * adjusted_duration)
 
-                # Process image once
+                adjusted_duration = duration + transition_duration if i < len(image_files) - 1 else duration
+                total_frames = int(fps * adjusted_duration)
+                effect_frames = int(min(adjusted_duration, effect_duration) * fps)
+
                 with Image.open(img_file) as img:
-                    # Resize to ensure even dimensions
                     img = img.resize((base_width, base_height), Image.LANCZOS)
-                    
-                    # Generate and save frames to disk instead of keeping them in memory
-                    for t in range(num_frames):
-                        frame_path = os.path.join(img_dir, f"{t:06d}.jpg")
-                        
-                        # Calculate zoom factor
-                        zoom = 1 + 0.1 * (t / (num_frames - 1)) if num_frames > 1 else 1
-                        
-                        # Apply zoom effect while ensuring dimensions stay even
-                        zoomed_width = int(base_width * zoom)
-                        zoomed_height = int(base_height * zoom)
-                        # Ensure zoomed dimensions are even
-                        zoomed_width = zoomed_width - (zoomed_width % 2)
-                        zoomed_height = zoomed_height - (zoomed_height % 2)
-                        
-                        # Create zoomed image
+                    base_frames = []
+
+                    for t in range(effect_frames):
+                        zoom = 1 + 0.1 * (t / (effect_frames - 1)) if effect_frames > 1 else 1
+                        zoomed_width = int(base_width * zoom) - (int(base_width * zoom) % 2)
+                        zoomed_height = int(base_height * zoom) - (int(base_height * zoom) % 2)
+
                         with img.resize((zoomed_width, zoomed_height), Image.LANCZOS) as zoomed_img:
-                            # Calculate crop coordinates
                             left = (zoomed_width - base_width) // 2
                             top = (zoomed_height - base_height) // 2
                             right = left + base_width
@@ -387,10 +379,20 @@ def create_video_from_images(request):
                             
                             # Crop and save the frame
                             with zoomed_img.crop((left, top, right, bottom)) as cropped_img:
-                                # Use quality parameter to reduce file size
-                                cropped_img.save(frame_path, 'JPEG', quality=85)
-                
-                # Create clip from saved frames
+                                base_frames.append(cropped_img.copy())
+
+                    # Repeat base frames to fill total_frames
+                    full_frames = []
+                    while len(full_frames) < total_frames:
+                        for frame in base_frames:
+                            if len(full_frames) >= total_frames:
+                                break
+                            full_frames.append(frame)
+
+                    for j, frame in enumerate(full_frames):
+                        frame_path = os.path.join(img_dir, f"{j:06d}.jpg")
+                        frame.save(frame_path, 'JPEG', quality=85)
+
                 clip = ImageSequenceClip(img_dir, fps=fps)
                 clips.append(clip)
             
@@ -413,7 +415,7 @@ def create_video_from_images(request):
                 threads=min(os.cpu_count() or 4, 8),
                 preset='faster',
                 ffmpeg_params=['-crf', '24', '-pix_fmt', 'yuv420p'],
-                logger=None,  # Suppress MoviePy logs
+                logger=None,
             )
             
             # Read and encode video with streaming to avoid loading entire file into memory
@@ -427,8 +429,7 @@ def create_video_from_images(request):
                 user=request.user,
                 video_base64=video_base64,
                 resolution=f"{base_width}x{base_height}",
-                frame_count=sum(int(fps * (duration_per_image + (transition_duration if i < len(image_files) - 1 else 0)))
-                               for i in range(len(image_files))),
+                frame_count=sum(int(fps * (durations[i] + (transition_duration if i < len(image_files) - 1 else 0))) for i in range(len(image_files))),
                 total_duration=final_clip.duration,
                 prompt=prompt
             )
@@ -439,7 +440,7 @@ def create_video_from_images(request):
                     image_base64=img_base64,
                     order=order + 1
                 )
-            
+
             return JsonResponse({
                 'video_id': video.id,
                 'video_base64': video_base64,
@@ -448,7 +449,9 @@ def create_video_from_images(request):
                 'total_duration': final_clip.duration,
                 'prompt': prompt
             })
-    
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid durations format'}, status=400)
     except Exception as e:
         logger.error(f"Video generation error: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
