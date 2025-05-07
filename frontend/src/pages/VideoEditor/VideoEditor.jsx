@@ -21,13 +21,19 @@ const VideoEditor = () => {
         audioEnd: 0,
         videoPreviewUrl: null,
         audioPreviewUrl: null,
-        isVideoPlaying: false,
-        isAudioPlaying: false
+        isPlaying: false, // Thay thế 2 state riêng bằng 1 state chung
+        currentTime: 0,
+        activeThumb: null,
     });
 
     const ffmpegRef = useRef(null);
     const previewVideoRef = useRef(null);
     const previewAudioRef = useRef(null);
+    const animationFrameRef = useRef(null);
+    const mainContainerRef = useRef(null);
+    const initialAudioDurationRef = useRef(null);
+    const initialVideoDurationRef = useRef(null);
+    const timeoutIdRef = useRef(null);
 
     // Initialize FFmpeg
     useEffect(() => {
@@ -92,42 +98,122 @@ const VideoEditor = () => {
         if (type === 'video') mediaElement.src = url;
     };
 
-    const togglePlayback = (type) => {
-        const ref = type === 'video' ? previewVideoRef : previewAudioRef;
-        const isPlaying = state[`is${type.charAt(0).toUpperCase() + type.slice(1)}Playing`];
+    const togglePlayback = () => {
+        console.log('Toggle playback', state.isPlaying);
+        console.log(state.currentTime, state.videoStart, state.audioStart);
 
-        if (ref.current) {
-            if (isPlaying) {
-                ref.current.pause();
-            } else {
-                ref.current.currentTime = state[`${type}Start`];
-                ref.current.play();
+        // Nếu đang chơi, dừng playback
+        if (state.isPlaying) {
+            previewVideoRef.current?.pause();
+            previewAudioRef.current?.pause();
+            if (timeoutIdRef.current != null) {
+                clearTimeout(timeoutIdRef.current);
+                console.log('Cleared timeout:', timeoutIdRef.current);
+                timeoutIdRef.current = null;
             }
-            setState(prev => ({ ...prev, [`is${type.charAt(0).toUpperCase() + type.slice(1)}Playing`]: !isPlaying }));
+            cancelAnimationFrame(animationFrameRef.current);
+        } else {
+            // Nếu không chơi, bắt đầu chơi từ thời gian gốc
+            if (previewVideoRef.current) {
+                previewVideoRef.current.currentTime = 0;
+                previewVideoRef.current.play();
+            }
+
+            if (previewAudioRef.current) {
+                const audioOffset = state.videoStart - state.audioStart;
+
+                if (audioOffset >= 0) {
+                    // Video bắt đầu sau audio → play audio từ giữa
+                    previewAudioRef.current.currentTime = audioOffset;
+                    previewAudioRef.current.play();
+                } else {
+                    // Video bắt đầu trước audio → delay audio
+                    previewAudioRef.current.currentTime = 0;
+
+                    // Chơi audio sau khi delay (dựa vào thời gian video bắt đầu trước audio)
+                    timeoutIdRef.current = setTimeout(() => {
+                        previewAudioRef.current?.play();
+                    }, -audioOffset * 1000);
+                    console.log('Set timeout:', timeoutIdRef.current);
+                }
+            }
+
+            const startTimestamp = performance.now();
+            const updateTime = () => {
+                const now = performance.now();
+                const elapsed = (now - startTimestamp) / 1000;
+
+                const currentTime = state.videoStart + elapsed;
+
+                setState(prev => ({ ...prev, currentTime }));
+
+                // Dừng khi vượt videoEnd (gốc là video)
+                if (currentTime >= state.videoEnd) {
+                    previewVideoRef.current?.pause();
+                    previewAudioRef.current?.pause();
+                    cancelAnimationFrame(animationFrameRef.current);
+                    setState(prev => ({ ...prev, isPlaying: false }));
+                } else {
+                    animationFrameRef.current = requestAnimationFrame(updateTime);
+                }
+            };
+
+            animationFrameRef.current = requestAnimationFrame(updateTime);
         }
+
+        setState(prev => ({ ...prev, isPlaying: !prev.isPlaying }));
     };
+
+    useEffect(() => {
+        const video = previewVideoRef.current;
+        const audio = previewAudioRef.current;
+
+        const onVideoTimeUpdate = () => {
+            if (video.currentTime >= state.videoEnd) {
+                video.pause();
+                audio.pause();
+            }
+        };
+
+        const onAudioTimeUpdate = () => {
+            if (audio.currentTime >= state.audioEnd) {
+                audio.pause();
+            }
+        };
+
+        if (video) video.addEventListener('timeupdate', onVideoTimeUpdate);
+        if (audio) audio.addEventListener('timeupdate', onAudioTimeUpdate);
+
+        return () => {
+            if (video) video.removeEventListener('timeupdate', onVideoTimeUpdate);
+            if (audio) audio.removeEventListener('timeupdate', onAudioTimeUpdate);
+        };
+    }, [state.videoEnd, state.audioEnd]);
+
+    useEffect(() => {
+        if (
+            state.audioDuration > 0 &&
+            state.audioEnd > state.audioStart &&
+            initialAudioDurationRef.current === null
+        ) {
+            initialAudioDurationRef.current = state.audioEnd - state.audioStart;
+        }
+
+        if (
+            state.videoDuration > 0 &&
+            state.videoEnd > state.videoStart &&
+            initialVideoDurationRef.current === null
+        ) {
+            initialVideoDurationRef.current = state.videoEnd - state.videoStart;
+        }
+    }, [state.audioDuration, state.videoDuration, state.audioStart, state.audioEnd, state.videoStart, state.videoEnd]);
 
     // Timeline effects
     useEffect(() => {
-        const handleTimeUpdate = (type) => () => {
-            const ref = type === 'video' ? previewVideoRef : previewAudioRef;
-            if (ref.current?.currentTime >= state[`${type}End`]) {
-                ref.current.pause();
-                setState(prev => ({ ...prev, [`is${type.charAt(0).toUpperCase() + type.slice(1)}Playing`]: false }));
-            }
-        };
-
-        const videoListener = handleTimeUpdate('video');
-        const audioListener = handleTimeUpdate('audio');
-
-        previewVideoRef.current?.addEventListener('timeupdate', videoListener);
-        previewAudioRef.current?.addEventListener('timeupdate', audioListener);
-
         return () => {
-            previewVideoRef.current?.removeEventListener('timeupdate', videoListener);
-            previewAudioRef.current?.removeEventListener('timeupdate', audioListener);
+            cancelAnimationFrame(animationFrameRef.current);
         };
-    }, [state.videoEnd, state.audioEnd]);
+    }, []);
 
     const mergeMedia = async () => {
         try {
@@ -143,37 +229,42 @@ const VideoEditor = () => {
 
             const videoDuration = videoEnd - videoStart;
             const audioDuration = audioEnd - audioStart;
-            const outputDuration = Math.max(videoDuration, audioDuration);
+
+            const padStart = Math.max(0, audioStart - videoStart);
+            const padEnd = Math.max(0, videoEnd - audioEnd); // phần cần kéo dài video
+            const effectiveAudioStart = Math.max(0, videoStart - audioStart);
+            const trimmedAudioDuration = audioDuration - effectiveAudioStart;
+            const finalDuration = Math.max(0, audioEnd - videoEnd);
+
+            console.log(videoStart, videoEnd, audioStart, audioEnd);
+            console.log('Pad Start:', padStart, 'Pad End:', padEnd);
 
             await ffmpeg.exec([
-                // Input video with trimming
-                '-ss', videoStart.toString(),
+                // Trim video
+                '-ss', '0',
                 '-t', videoDuration.toString(),
                 '-i', 'input.mp4',
 
-                // Input audio with independent trimming
-                '-ss', audioStart.toString(),
-                '-t', audioDuration.toString(),
+                // Trim audio
+                '-ss', effectiveAudioStart.toString(),
+                '-t', trimmedAudioDuration.toString(),
                 '-i', 'audio.mp3',
 
-                // Process audio (pad with silence if needed)
+                // Filter complex
                 '-filter_complex',
-                `[1:a]apad=whole_dur=${outputDuration}[padded_audio]`,
+                `[0:v]tpad=stop_mode=clone:stop_duration=${padEnd},setpts=PTS-STARTPTS[vout];` +
+                `[1:a]adelay=${padStart * 1000}|${padStart * 1000},apad=pad_dur=${finalDuration}[aout]`,
 
-                // Combine streams
-                '-map', '0:v',
-                '-map', '[padded_audio]',
-
-                // Output settings
-                '-c:v', 'copy',
+                // Map output
+                '-map', '[vout]',
+                '-map', '[aout]',
+                '-c:v', 'libx264',
                 '-c:a', 'aac',
-                '-shortest',
                 'output.mp4'
             ]);
 
             const data = await ffmpeg.readFile('output.mp4');
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
-
             setState(prev => ({ ...prev, outputUrl: url }));
         } catch (err) {
             setState(prev => ({ ...prev, error: err.message }));
@@ -182,6 +273,8 @@ const VideoEditor = () => {
         }
     };
 
+
+
     // Helper functions
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
@@ -189,148 +282,187 @@ const VideoEditor = () => {
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
-    const handleRangeChange = (type, values) => {
-        setState(prev => ({
-            ...prev,
-            [`${type}Start`]: values[0],
-            [`${type}End`]: values[1]
-        }));
-    };
+    const renderCombinedTimeline = () => {
+        const maxDuration = Math.max(state.videoDuration || 0, state.audioDuration || 0);
+        const totalDuration = (state.videoDuration || 0) + (state.audioDuration || 0);
 
-    // Render function for timeline
-    const renderTimeline = (type) => {
-        const duration = state[`${type}Duration`];
-        const start = state[`${type}Start`];
-        const end = state[`${type}End`];
-        const mediaRef = type === 'video' ? previewVideoRef : previewAudioRef;
+        const videoRange = [
+            state.videoStart,
+            state.videoEnd
+        ];
+        const audioRange = [
+            state.audioStart,
+            state.audioEnd
+        ];
 
-        const handleStartChange = (newStart) => {
-            setState(prev => ({
-                ...prev,
-                [`${type}Start`]: newStart
-            }));
+        const handleVideoRangeChange = (values) => {
+            const maxAllowed = initialVideoDurationRef.current;
+            let [start, end] = values;
+            const { videoStart, videoEnd } = state;
+            const isStartChanged = Math.abs(start - videoStart) > Math.abs(end - videoEnd);
 
-            // Cập nhật preview khi thay đổi điểm bắt đầu
-            if (mediaRef.current) {
-                mediaRef.current.currentTime = newStart;
-                if (state[`is${type.charAt(0).toUpperCase() + type.slice(1)}Playing`]) {
-                    mediaRef.current.play();
+            if (end - start > maxAllowed) {
+                if (isStartChanged) {
+                    end = start + maxAllowed;
+                } else {
+                    start = end - maxAllowed;
                 }
             }
-        };
 
-        const handleEndChange = (newEnd) => {
             setState(prev => ({
                 ...prev,
-                [`${type}End`]: newEnd
+                videoStart: start,
+                videoEnd: end
             }));
-
-            // Dừng phát nếu đang vượt quá điểm kết thúc mới
-            if (mediaRef.current && mediaRef.current.currentTime > newEnd) {
-                mediaRef.current.pause();
-                setState(prev => ({
-                    ...prev,
-                    [`is${type.charAt(0).toUpperCase() + type.slice(1)}Playing`]: false
-                }));
-            }
         };
 
-        const handleRangeChange = (values) => {
-            const [newStart, newEnd] = values;
-            handleStartChange(newStart);
-            handleEndChange(newEnd);
+        const handleAudioRangeChange = (values) => {
+            const maxAllowed = initialAudioDurationRef.current;
+            let [start, end] = values;
+            const { audioStart, audioEnd } = state;
+            const isStartChanged = Math.abs(start - audioStart) > Math.abs(end - audioEnd);
+
+            if (end - start > maxAllowed) {
+                if (isStartChanged) {
+                    end = start + maxAllowed;
+                } else {
+                    start = end - maxAllowed;
+                }
+            }
+
+            setState(prev => ({
+                ...prev,
+                audioStart: start,
+                audioEnd: end
+            }));
+        };
+
+        const renderThumbWithKeyFix = () => ({ props }) => {
+            const { key, ...rest } = props;
+            return <div key={key} {...rest} style={{ ...rest.style, ...styles.timelineThumb }} />;
         };
 
         return (
-            <div style={styles.timelineContainer}>
-                <div style={styles.timelineHeader}>
-                    <span>Start: {formatTime(start)}</span>
-                    <span style={styles.durationText}>Duration: {formatTime(end - start)}</span>
-                    <span>End: {formatTime(end)}</span>
+            <div style={styles.combinedTimelineContainer}>
+                {/* Video Timeline */}
+                <div style={styles.timelineSection}>
+                    <div style={styles.timelineHeader}>
+                        <span>Video: {formatTime(state.videoStart)} - {formatTime(state.videoEnd)}</span>
+                        <span style={styles.durationText}>
+                            Duration: {formatTime(state.videoEnd - state.videoStart)}
+                        </span>
+                    </div>
+                    {state.videoDuration > 0 && (
+                        <Range
+                            step={0.1}
+                            min={0}
+                            max={totalDuration}
+                            values={videoRange}
+                            onChange={handleVideoRangeChange}
+                            renderTrack={renderTrackWithOverlay({
+                                values: videoRange,
+                                validUntil: state.videoDuration,
+                                max: totalDuration,
+                                color: '#4CAF50' // Màu xanh lá cho video
+                            })}
+                            renderThumb={renderThumbWithKeyFix()}
+                        />
+                    )}
                 </div>
 
-                <Range
-                    step={0.1}
-                    min={0}
-                    max={duration}
-                    values={[start, end]}
-                    onChange={handleRangeChange}
-                    renderTrack={({ props: trackProps, children }) => {
-                        const { key, ...restTrackProps } = trackProps;
-                        return (
-                            <div
-                                key={key}
-                                {...restTrackProps}
-                                style={{ ...restTrackProps.style, ...styles.timelineTrack }}
-                            >
-                                {children}
-                            </div>
-                        );
-                    }}
-                    renderThumb={({ props: thumbProps, isDragged }) => {
-                        const { key, ...restThumbProps } = thumbProps;
-                        return (
-                            <div
-                                key={key}
-                                {...restThumbProps}
-                                style={{
-                                    ...restThumbProps.style,
-                                    ...styles.timelineThumb,
-                                    ...(isDragged ? styles.thumbDragging : {})
-                                }}
-                            />
-                        );
-                    }}
-                />
+                {/* Audio Timeline */}
+                <div style={styles.timelineSection}>
+                    <div style={styles.timelineHeader}>
+                        <span>Audio: {formatTime(state.audioStart)} - {formatTime(state.audioEnd)}</span>
+                        <span style={styles.durationText}>
+                            Duration: {formatTime(state.audioEnd - state.audioStart)}
+                        </span>
+                    </div>
+                    {state.audioDuration > 0 && (
+                        <Range
+                            step={0.1}
+                            min={0}
+                            max={totalDuration}
+                            values={audioRange}
+                            onChange={handleAudioRangeChange}
+                            renderTrack={renderTrackWithOverlay({
+                                values: audioRange,
+                                validUntil: state.audioDuration,
+                                max: totalDuration,
+                                color: '#2196F3' // Màu xanh dương cho audio
+                            })}
+                            renderThumb={renderThumbWithKeyFix()}
+                        />
+                    )}
+                </div>
+
+                {/* Playback Indicator */}
+                <div style={styles.playbackIndicatorContainer}>
+                    <div
+                        style={{
+                            ...styles.playbackIndicator,
+                            left: `${(state.currentTime / totalDuration) * 100}%`
+                        }}
+                    />
+                </div>
             </div>
         );
     };
 
+    const renderTrackWithOverlay = ({ values, validUntil, max, color }) =>
+        ({ props, children }) => {
+            const [start, end] = values;
+            const rangeStart = (start / max) * 100;
+            const rangeEnd = (end / max) * 100;
+            const validPercent = (validUntil / max) * 100;
+
+            return (
+                <div
+                    {...props}
+                    style={{
+                        ...props.style,
+                        height: '6px',
+                        width: '100%',
+                        background: `
+                            linear-gradient(
+                                to right,
+                                #ccc 0%,
+                                #ccc ${rangeStart}%,
+                                ${color} ${rangeStart}%,
+                                ${color} ${rangeEnd}%,
+                                #ccc ${rangeEnd}%,
+                                #ccc 100%
+                            )
+                        `,
+                        borderRadius: '999px',
+                        position: 'relative',
+                    }}
+                >
+                    {children}
+                </div>
+            );
+        };
+
     return (
-        <div>
+        <div ref={mainContainerRef}>
             <StickyHeader title="Video Editor" />
 
             <div style={styles.container}>
                 {state.error && <div style={styles.error}>{state.error}</div>}
 
+                {/* File Inputs */}
                 <div style={styles.inputGroup}>
-                    {/* Video Input */}
                     <div style={styles.inputContainer}>
                         <label style={styles.label}>Select Video:</label>
                         <input
                             type="file"
-                            accept="video/*"
+                            accept="*"
                             onChange={(e) => handleFileChange('video', e)}
                             disabled={state.isProcessing}
                             style={styles.input}
                         />
-
-                        {state.videoPreviewUrl && (
-                            <>
-                                <video
-                                    ref={previewVideoRef}
-                                    src={state.videoPreviewUrl}
-                                    controls={false}
-                                    style={styles.previewVideo}
-                                    onClick={() => togglePlayback('video')}
-                                />
-                                <div style={styles.previewControls}>
-                                    <button
-                                        onClick={() => togglePlayback('video')}
-                                        style={styles.playButton}
-                                    >
-                                        {state.isVideoPlaying ? 'Pause' : 'Play'}
-                                    </button>
-                                    <span style={styles.previewTime}>
-                                        {formatTime(state.videoStart)} - {formatTime(state.videoEnd)}
-                                    </span>
-                                </div>
-                                {renderTimeline('video')}
-                            </>
-                        )}
                     </div>
 
-                    {/* Audio Input */}
                     <div style={styles.inputContainer}>
                         <label style={styles.label}>Select Audio:</label>
                         <input
@@ -340,32 +472,46 @@ const VideoEditor = () => {
                             disabled={state.isProcessing}
                             style={styles.input}
                         />
-
-                        {state.audioPreviewUrl && (
-                            <div style={styles.previewContainer}>
-                                <div style={styles.audioWaveform}>
-                                    <span style={styles.audioLabel}>Audio Track</span>
-                                </div>
-                                <div style={styles.previewControls}>
-                                    <button
-                                        onClick={() => togglePlayback('audio')}
-                                        style={styles.playButton}
-                                    >
-                                        {state.isAudioPlaying ? 'Pause' : 'Play'}
-                                    </button>
-                                    <span style={styles.previewTime}>
-                                        {formatTime(state.audioStart)} - {formatTime(state.audioEnd)}
-                                    </span>
-                                </div>
-                                <audio
-                                    ref={previewAudioRef}
-                                    src={state.audioPreviewUrl}
-                                />
-                                {renderTimeline('audio')}
-                            </div>
-                        )}
                     </div>
                 </div>
+
+                {/* Main Preview */}
+                <div style={styles.mainPreviewContainer}>
+                    {state.videoPreviewUrl && (
+                        <video
+                            ref={previewVideoRef}
+                            src={state.videoPreviewUrl}
+                            controls={false}
+                            style={styles.mainPreviewVideo}
+                            onClick={togglePlayback}
+                        />
+                    )}
+
+                    <div style={styles.mainPreviewControls}>
+                        <button
+                            onClick={togglePlayback}
+                            style={styles.playButton}
+                            disabled={!state.videoFile || !state.audioFile}
+                        >
+                            {state.isPlaying ? (
+                                <span>⏸ Pause</span>
+                            ) : (
+                                <span>▶️ Play ({formatTime(state.currentTime)})</span>
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Combined Timeline */}
+                {renderCombinedTimeline()}
+
+                {/* Hidden audio element for playback */}
+                {state.audioPreviewUrl && (
+                    <audio
+                        ref={previewAudioRef}
+                        src={state.audioPreviewUrl}
+                    />
+                )}
 
                 <button
                     style={{
@@ -400,12 +546,12 @@ const VideoEditor = () => {
     );
 };
 
-// Styles (optimized version)
+// Updated styles
 const styles = {
     container: {
         maxWidth: '800px',
         margin: '0 auto',
-        padding: '20px 20px 120px',
+        padding: '20px',
         fontFamily: 'Arial, sans-serif'
     },
     error: {
@@ -415,56 +561,145 @@ const styles = {
         borderRadius: '4px',
         marginBottom: '15px',
     },
+    mainPreviewContainer: {
+        position: 'relative',
+        marginBottom: '20px',
+        backgroundColor: '#000',
+        borderRadius: '8px',
+        overflow: 'hidden'
+    },
+    mainPreviewVideo: {
+        width: '100%',
+        display: 'block',
+        cursor: 'pointer'
+    },
+    mainPreviewControls: {
+        position: 'absolute',
+        bottom: '0',
+        left: '0',
+        right: '0',
+        padding: '10px',
+        background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+        display: 'flex',
+        justifyContent: 'center'
+    },
+    combinedTimelineContainer: {
+        margin: '20px 0',
+        padding: '15px',
+        backgroundColor: '#f9f9f9',
+        borderRadius: '8px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+    },
+    timelineSection: {
+        marginBottom: '25px',
+        width: '100%',
+    },
+    timelineHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginBottom: '8px',
+        fontSize: '14px',
+        color: '#555'
+    },
+    durationText: {
+        fontWeight: 'bold'
+    },
+    timelineTrack: {
+        height: '8px',
+        width: '100%',
+        borderRadius: '4px',
+    },
+    timelineThumb: {
+        height: '18px',
+        width: '18px',
+        backgroundColor: '#fff',
+        borderRadius: '50%',
+        border: '2px solid #555',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+    },
+    playbackIndicatorContainer: {
+        position: 'relative',
+        height: '3px',
+        backgroundColor: '#eee',
+        marginTop: '20px',
+        borderRadius: '2px'
+    },
+    playbackIndicator: {
+        position: 'absolute',
+        top: '-5px',
+        width: '12px',
+        height: '12px',
+        backgroundColor: '#ff5722',
+        borderRadius: '50%',
+        transform: 'translateX(-50%)'
+    },
     inputGroup: {
         display: 'flex',
         gap: '20px',
-        marginBottom: '20px',
-        flexWrap: 'wrap',
+        marginBottom: '20px'
     },
     inputContainer: {
-        flex: '1',
-        minWidth: '250px',
+        flex: 1
     },
     label: {
         display: 'block',
-        marginBottom: '5px',
-        fontWeight: 'bold',
+        marginBottom: '8px',
+        fontWeight: '600',
+        color: '#333'
     },
     input: {
         width: '100%',
-        padding: '8px',
-        marginBottom: '10px',
+        padding: '10px',
+        border: '1px solid #ddd',
+        borderRadius: '4px',
+        fontSize: '14px'
     },
     button: {
         backgroundColor: '#4CAF50',
         color: 'white',
         border: 'none',
-        padding: '10px 20px',
+        padding: '12px 20px',
         fontSize: '16px',
         cursor: 'pointer',
         borderRadius: '4px',
         transition: 'background-color 0.3s',
         width: '100%',
-        marginTop: '20px'
+        marginTop: '20px',
+        fontWeight: '600'
     },
     buttonDisabled: {
-        backgroundColor: '#cccccc',
-        cursor: 'not-allowed',
+        backgroundColor: '#a5d6a7',
+        cursor: 'not-allowed'
+    },
+    playButton: {
+        backgroundColor: '#2196F3',
+        color: 'white',
+        border: 'none',
+        padding: '8px 16px',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '16px',
+        fontWeight: '600',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
     },
     resultContainer: {
         marginTop: '30px',
         borderTop: '1px solid #eee',
-        paddingTop: '20px',
+        paddingTop: '20px'
     },
     subHeader: {
         color: '#333',
-        marginBottom: '15px'
+        marginBottom: '15px',
+        fontSize: '18px'
     },
     video: {
         width: '100%',
         maxHeight: '500px',
         backgroundColor: '#000',
         margin: '15px 0',
+        borderRadius: '4px'
     },
     downloadButton: {
         display: 'inline-block',
@@ -474,79 +709,9 @@ const styles = {
         textDecoration: 'none',
         borderRadius: '4px',
         transition: 'background-color 0.3s',
-        marginTop: '10px'
-    },
-    timelineContainer: {
         marginTop: '10px',
-        padding: '10px',
-        backgroundColor: '#f5f5f5',
-        borderRadius: '4px',
-    },
-    timelineHeader: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        marginBottom: '10px',
-        fontSize: '14px'
-    },
-    durationText: {
-        fontWeight: 'bold',
-    },
-    timelineTrack: {
-        height: '6px',
-        width: '100%',
-        backgroundColor: '#ddd',
-        borderRadius: '3px',
-    },
-    timelineThumb: {
-        height: '16px',
-        width: '16px',
-        backgroundColor: '#4285f4',
-        borderRadius: '50%',
-        outline: 'none'
-    },
-    previewContainer: {
-        marginTop: '10px',
-        border: '1px solid #ddd',
-        borderRadius: '4px',
-        padding: '10px',
-    },
-    previewVideo: {
-        width: '100%',
-        maxHeight: '200px',
-        backgroundColor: '#000',
-        cursor: 'pointer',
-    },
-    audioWaveform: {
-        height: '60px',
-        backgroundColor: '#f0f0f0',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: '4px',
-        marginBottom: '10px',
-    },
-    audioLabel: {
-        color: '#666',
-    },
-    previewControls: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        margin: '10px 0',
-    },
-    playButton: {
-        backgroundColor: '#2196F3',
-        color: 'white',
-        border: 'none',
-        padding: '5px 10px',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '14px'
-    },
-    previewTime: {
-        color: '#666',
-        fontSize: '0.9em',
-    },
+        fontWeight: '600'
+    }
 };
 
 export default VideoEditor;

@@ -509,9 +509,10 @@ const TextToVideo = () => {
         }
 
         const formData = new FormData();
+        // const durations = [5.0, 9.0, 4.0, 6.0];
         imageFiles.forEach((file) => formData.append("images", file));
         formData.append("fps", 24);
-        formData.append("duration", 2.0);
+        formData.append("durations", JSON.stringify(imageFiles.map(() => 8.0)));
         formData.append("transition_duration", 1.0);
         formData.append("prompt", prompt);
 
