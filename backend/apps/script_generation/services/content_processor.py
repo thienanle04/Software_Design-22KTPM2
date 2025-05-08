@@ -155,7 +155,7 @@ Break the story into clearly numbered scenes like this:
 
 ### SCENE 1: [Short summary of the scene]
 - **Narration (Third-person, no characters)**: Describe the scene in vivid, cinematic language. Focus on how the world changes, what is happening, and how science is involved. No dialogue or character names — just storytelling.
-- **Visual Description**: Describe what visuals should appear in this scene (e.g., swirling galaxies, a drop of water falling into a leaf, industrial robots assembling parts).
+- **Visual Description (for still image generation)**: Describe what a single **illustrative image** for this scene should look like. Use precise, descriptive language suitable for generating a **single static image** (e.g., a high-resolution painting of a DNA strand twisting in space, a close-up photo of frost forming on a window).
 - **Sound Effects / Music (optional)**: Suggest fitting background audio (e.g., gentle wind, deep rumble, uplifting orchestral music).
 
 ... Continue with SCENE 2, SCENE 3, etc.

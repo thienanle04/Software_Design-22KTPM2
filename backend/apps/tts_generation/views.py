@@ -30,8 +30,6 @@ class GenerateAudioView(View):
             slow = request.POST.get('slow', 'False').lower() == 'true'
             style = request.POST.get('style', None)
 
-            logger.info(f"Generating audio: text='{text[:50]}...', language={language}, pitch_shift={pitch_shift}, slow={slow}, style={style}")
-
             if not text:
                 logger.error("Text is required")
                 return JsonResponse({'error': 'Text is required'}, status=400)
@@ -48,7 +46,6 @@ class GenerateAudioView(View):
                 temp_path = temp_file.name
 
             # Generate audio with gTTS
-            logger.info(f"Saving gTTS to {temp_path}")
             tts = gTTS(text=text, lang=language, slow=slow)
             tts.save(temp_path)
 
@@ -59,28 +56,21 @@ class GenerateAudioView(View):
 
             # Apply pitch shift and effects with pydub
             audio = AudioSegment.from_mp3(temp_path)
-            logger.info(f"Initial audio duration: {len(audio)/1000.0}s")
 
             if pitch_shift != 1.0:
                 new_rate = int(audio.frame_rate * pitch_shift)
                 audio = audio._spawn(audio.raw_data, overrides={'frame_rate': new_rate})
                 audio = audio.set_frame_rate(audio.frame_rate)
-                logger.info(f"Applied pitch_shift: {pitch_shift}")
 
             # Apply effects based on style
             if style == 'funny':
                 audio = audio.speedup(playback_speed=1.1)  # Tăng nhẹ tốc độ
-                logger.info("Applied funny style: speedup=1.1")
-            elif style == 'serious':
-                # Không áp dụng speedup để tránh lỗi
-                logger.info("Applied serious style: no speedup")
 
             # Kiểm tra audio sau xử lý
             if len(audio) == 0:
                 logger.error("Audio is empty after processing")
                 raise ValueError("Generated audio is empty")
 
-            logger.info(f"Final audio duration: {len(audio)/1000.0}s")
             audio.export(temp_path, format='mp3')
 
             # Save to GeneratedVoice
@@ -105,7 +95,6 @@ class GenerateAudioView(View):
             def cleanup():
                 try:
                     os.remove(temp_path)
-                    logger.info(f"Cleaned up {temp_path}")
                 except Exception as e:
                     logger.error(f"Failed to clean up {temp_path}: {str(e)}")
 
@@ -257,8 +246,6 @@ class GenerateVideoView(View):
             slow = request.POST.get('slow', 'False').lower() == 'true'
             style = request.POST.get('style', None)
 
-            logger.info(f"Generating video: text='{text[:50]}...', language={language}, pitch_shift={pitch_shift}, slow={slow}, style={style}")
-
             if not text:
                 logger.error("Text is required")
                 return JsonResponse({'error': 'Text is required'}, status=400)
@@ -275,7 +262,6 @@ class GenerateVideoView(View):
             temp_video_file = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
 
             # Generate audio with gTTS
-            logger.info(f"Saving gTTS to {temp_audio_file.name}")
             tts = gTTS(text=text, lang=language, slow=slow)
             tts.save(temp_audio_file.name)
 
@@ -286,28 +272,21 @@ class GenerateVideoView(View):
 
             # Apply pitch shift and effects with pydub
             audio = AudioSegment.from_mp3(temp_audio_file.name)
-            logger.info(f"Initial audio duration: {len(audio)/1000.0}s")
 
             if pitch_shift != 1.0:
                 new_rate = int(audio.frame_rate * pitch_shift)
                 audio = audio._spawn(audio.raw_data, overrides={'frame_rate': new_rate})
                 audio = audio.set_frame_rate(audio.frame_rate)
-                logger.info(f"Applied pitch_shift: {pitch_shift}")
 
             # Apply effects based on style
             if style == 'funny':
                 audio = audio.speedup(playback_speed=1.1)  # Tăng nhẹ tốc độ
-                logger.info("Applied funny style: speedup=1.1")
-            elif style == 'serious':
-                # Không áp dụng speedup để tránh lỗi
-                logger.info("Applied serious style: no speedup")
 
             # Kiểm tra audio sau xử lý
             if len(audio) == 0:
                 logger.error("Audio is empty after processing")
                 raise ValueError("Generated audio is empty")
 
-            logger.info(f"Final audio duration: {len(audio)/1000.0}s")
             audio.export(temp_audio_file.name, format='mp3')
 
             # Create video with moviepy
