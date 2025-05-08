@@ -18,7 +18,10 @@ from mutagen.mp3 import MP3
 import base64
 
 logger = logging.getLogger(__name__)
-
+logging.getLogger("google.api_core").setLevel(logging.ERROR)
+logging.getLogger("google.auth").setLevel(logging.ERROR)
+logging.getLogger("google.auth.transport.requests").setLevel(logging.ERROR)
+logging.getLogger("gtts").setLevel(logging.ERROR)
 @method_decorator(csrf_exempt, name='dispatch')
 @permission_classes([AllowAny])
 class GenerateAudioView(View):

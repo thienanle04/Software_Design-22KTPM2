@@ -87,7 +87,7 @@ class ContentProcessor:
     """
 
         try:
-            model = genai.GenerativeModel('gemini-1.5-pro-latest')
+            model = genai.GenerativeModel('gemini-1.5-flash-latest')
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
@@ -175,7 +175,7 @@ Now begin the story.
 """
 
         try:
-            model = genai.GenerativeModel('gemini-1.5-pro-latest')
+            model = genai.GenerativeModel('gemini-1.5-flash-latest')
             response = model.generate_content(prompt)
             return str(response.text)
         except Exception as e:
