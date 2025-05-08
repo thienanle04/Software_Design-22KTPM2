@@ -20,3 +20,6 @@ imageio
 imageio-ffmpeg
 gradio-client
 google.generativeai
+gtts
+pydub
+mutagen

@@ -14,6 +14,7 @@ class GeneratedVoice(models.Model):
     audio_file = models.FileField(upload_to='generated_audio/', null=True, blank=True)
     pitch_shift = models.FloatField(default=1.0)
     speed = models.FloatField(default=1.0)
+    duration = models.FloatField(null=True, blank=True)  # New field for audio duration
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

@@ -113,6 +113,7 @@ const TextToVideo = () => {
   const [loading, setLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   const [generatedImages, setGeneratedImages] = useState([]);
+  const [generatedAudios, setGeneratedAudios] = useState([]);
   const [generatedVideo, setGeneratedVideo] = useState(null);
   const [style, setStyle] = useState("Realistic");
   const [resolution, setResolution] = useState("1024x1024");
@@ -249,7 +250,7 @@ const TextToVideo = () => {
     }
   }, [location.state]);
 
-  // Fetch science story and extract visual descriptions
+  // Fetch science story and process visual descriptions and narration
   const fetchScienceStory = async (simplifiedPrompt) => {
     setStoryLoading(true);
     try {
@@ -287,18 +288,27 @@ const TextToVideo = () => {
         if (!retryResponse.ok) throw new Error("Failed to generate science story.");
         const data = await retryResponse.json();
         console.log("Science story response:", data);
-        return processStory(data.story, simplifiedPrompt);
+        return {
+          imagePrompt: processStory(data.story, simplifiedPrompt),
+          audioPrompt: extractNarration(data.story, simplifiedPrompt),
+        };
       } else if (!response.ok) {
         throw new Error("Failed to generate science story.");
       } else {
         const data = await response.json();
         console.log("Science story response:", data);
-        return processStory(data.story, simplifiedPrompt);
+        return {
+          imagePrompt: processStory(data.story, simplifiedPrompt),
+          audioPrompt: extractNarration(data.story, simplifiedPrompt),
+        };
       }
     } catch (error) {
       console.error("Error fetching science story:", error);
       messageApi.error("Failed to generate science story: " + error.message);
-      return simplifiedPrompt; // Fallback to simplified prompt
+      return {
+        imagePrompt: simplifiedPrompt,
+        audioPrompt: simplifiedPrompt,
+      };
     } finally {
       setStoryLoading(false);
     }
@@ -324,6 +334,27 @@ const TextToVideo = () => {
     }
     
   };
+
+  const extractNarration = (story, simplifiedPrompt) => {
+    const narrationRegex = /- \*\*Narration\*\*: (.*?)(?=\n- \*\*(Dialogue|Visual Description|Sound Effects \/ Music)\*\*:|\n\n|### SCENE|\n### FINAL SECTION|$)/gs;
+    const narrationBlocks = [];
+    let match;
+
+    while ((match = narrationRegex.exec(story)) !== null) {
+      narrationBlocks.push(match[1].trim());
+    }
+
+    if (narrationBlocks.length > 0) {
+      const combinedPrompt = narrationBlocks.join("\n");
+      setPrompt(combinedPrompt);
+      return combinedPrompt;
+    } else {
+      messageApi.warning("No narration found in story. Using simplified prompt.");
+      setPrompt(simplifiedPrompt);
+      return simplifiedPrompt;
+    }
+  };
+
 
   const closeModal = () => {
     setModalVisible(false);
@@ -397,15 +428,15 @@ const TextToVideo = () => {
   };
 
   // Convert base64 to File object
-  const base64ToFile = (base64String, filename) => {
+  const base64ToFile = (base64String, filename, mimeType) => {
     const byteString = atob(base64String);
     const arrayBuffer = new ArrayBuffer(byteString.length);
     const uint8Array = new Uint8Array(arrayBuffer);
     for (let i = 0; i < byteString.length; i++) {
       uint8Array[i] = byteString.charCodeAt(i);
     }
-    const blob = new Blob([arrayBuffer], { type: "image/png" });
-    return new File([blob], filename, { type: "image/png" });
+    const blob = new Blob([arrayBuffer], { type: mimeType });
+    return new File([blob], filename, { type: mimeType });
   };
 
   // Handle image generation
@@ -473,7 +504,7 @@ const TextToVideo = () => {
     }
   };
 
-  // Handle generation (images and video)
+  // Handle generation (images, audios, and video)
   const handleGenerate = async () => {
     console.log("handleGenerate called with prompt:", prompt);
     if (!prompt.trim()) {
@@ -486,78 +517,111 @@ const TextToVideo = () => {
       return;
     }
 
-    if (generatedImages.length === 0) {
-      // Step 1: Fetch science story and generate images
-      const finalPrompt = await fetchScienceStory(prompt);
-      console.log("Proceeding to generate images with prompt:", finalPrompt);
-      await generateImages(finalPrompt);
-    } else {
-      // Step 2: Generate video from images
-      try {
-        let token = localStorage.getItem(ACCESS_TOKEN);
-        if (!token) {
-          throw new Error("Authentication token missing. Please log in again.");
+    try {
+      setLoading(true);
+
+      let audios = generatedAudios;
+      let images = generatedImages;
+      let imagePrompt = prompt;
+      let audioPrompt = prompt;
+
+      // Step 1: Fetch science story if needed
+      if (audios.length === 0 && generatedImages.length === 0) {
+        const { imagePrompt: fetchedImagePrompt, audioPrompt: fetchedAudioPrompt } = await fetchScienceStory(prompt);
+        imagePrompt = fetchedImagePrompt;
+        audioPrompt = fetchedAudioPrompt;
+      }
+
+      // Step 2: Generate audios if not already generated
+      if (audios.length === 0) {
+        audios = await generateMultiTTS(audioPrompt, messageApi, {
+          language: "en",
+          pitchShift: 1.0,
+          slow: false,
+        });
+        if (!audios || audios.length < 2) {
+          throw new Error(`Not enough audios generated (${audios ? audios.length : 0}). Minimum 2 required.`);
         }
+        setGeneratedAudios(audios);
+      }
 
-        setLoading(true);
-        const imageFiles = generatedImages
-          .filter((img) => img)
-          .map((base64, index) => base64ToFile(base64, `image_${index}.png`));
-
-        if (imageFiles.length < 2) {
-          throw new Error("Not enough valid images to generate video (minimum 2 required).");
+      // Step 3: Generate images if not already generated
+      if (generatedImages.length === 0) {
+        images = await generateImages(imagePrompt);
+        if (images.length < 2) {
+          throw new Error(`Not enough images generated (${generatedImages.length}). Minimum 2 required.`);
         }
+      }
 
-        const formData = new FormData();
-        // const durations = [5.0, 9.0, 4.0, 6.0];
-        imageFiles.forEach((file) => formData.append("images", file));
-        formData.append("fps", 24);
-        formData.append("durations", JSON.stringify(imageFiles.map(() => 8.0)));
-        formData.append("transition_duration", 1.0);
-        formData.append("prompt", prompt);
 
-        let videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
+      // Step 4: Generate video with images and audios
+      const imageFiles = generatedImages
+        .filter((img) => img)
+        .map((base64, index) => base64ToFile(base64, `image_${index}.png`));
+
+      
+      if (generatedImages.length !== audios.length) {
+        throw new Error(`Final image-audio mismatch after processing. Images: ${generatedImages.length}, Audios: ${audios.length}`);
+      }
+
+      const durations = audios.map(audio => audio.duration);
+      const audioFiles = audios.map(audio => audio.audioFile);
+
+      const formData = new FormData();
+      imageFiles.forEach((file) => formData.append("images", file));
+      audioFiles.forEach((file) => formData.append("audios", file));
+      formData.append("fps", 24);
+      formData.append("durations", JSON.stringify(durations));
+      formData.append("transition_duration", 1.0);
+      formData.append("prompt", prompt);
+
+      let token = localStorage.getItem(ACCESS_TOKEN);
+      if (!token) {
+        throw new Error("Authentication token missing. Please log in again.");
+      }
+
+      let videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (videoResponse.status === 401) {
+        token = await refreshToken();
+        videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${token}`,
           },
           body: formData,
         });
-
-        if (videoResponse.status === 401) {
-          token = await refreshToken();
-          videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${token}`,
-            },
-            body: formData,
-          });
-        }
-
-        const videoData = await videoResponse.json();
-        if (videoResponse.ok && videoData.video_base64) {
-          const newVideo = {
-            id: videoData.video_id,
-            url: `data:video/mp4;base64,${videoData.video_base64}`,
-            prompt: videoData.prompt,
-            script: videoData.prompt,
-            image_ids: [],
-          };
-          setGeneratedVideo(newVideo.url);
-          setVideoList([newVideo, ...mycreationList]);
-          setGeneratedImages([]); // Clear images after video generation
-          messageApi.success("Video generated and saved successfully!");
-          closeModal();
-        } else {
-          throw new Error(videoData.error || "Video generation failed.");
-        }
-      } catch (error) {
-        console.error("Error during video generation:", error);
-        messageApi.error(error.message || "Failed to generate video.");
-      } finally {
-        setLoading(false);
       }
+
+      const videoData = await videoResponse.json();
+      if (videoResponse.ok && videoData.video_base64) {
+        const newVideo = {
+          id: videoData.video_id,
+          url: `data:video/mp4;base64,${videoData.video_base64}`,
+          prompt: videoData.prompt,
+          script: videoData.prompt,
+          image_ids: [],
+        };
+        setGeneratedVideo(newVideo.url);
+        setVideoList([newVideo, ...mycreationList]);
+        setGeneratedImages([]); // Clear images after video generation
+        setGeneratedAudios([]); // Clear audios after video generation
+        messageApi.success("Video with audio generated and saved successfully!");
+        closeModal();
+      } else {
+        throw new Error(videoData.error || "Video generation failed.");
+      }
+    } catch (error) {
+      console.error("Error during generation:", error);
+      messageApi.error(error.message || "Failed to generate video.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -577,6 +641,118 @@ const TextToVideo = () => {
   if (authLoading) {
     return <Spin size="large" style={{ display: "block", margin: "50px auto" }} />;
   }
+
+  const generateTTS = async (text, messageApi, options = {}) => {
+    console.log("generateTTS called with text:", text);
+    try {
+      const { language = "en", pitchShift = 1.0, slow = false } = options;
+      let token = localStorage.getItem(ACCESS_TOKEN);
+      if (!token) {
+        throw new Error("Authentication token missing. Please log in again.");
+      }
+  
+      const formData = new FormData();
+      formData.append("text", text);
+      formData.append("language", language);
+      formData.append("pitch_shift", pitchShift);
+      formData.append("slow", slow.toString());
+  
+      const response = await fetch("http://127.0.0.1:8000/api/tts/generate-audio/", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+  
+      if (response.status === 401) {
+        console.log("401 error, refreshing token for TTS generation");
+        token = await refreshToken();
+        const retryResponse = await fetch("http://127.0.0.1:8000/api/tts/generate-audio/", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+        if (!retryResponse.ok) throw new Error("Failed to generate TTS.");
+        const blob = await retryResponse.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        console.log("TTS audio URL:", audioUrl);
+        return { audioUrl, language, pitchShift, slow };
+      } else if (!response.ok) {
+        throw new Error("Failed to generate TTS.");
+      } else {
+        const blob = await response.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        console.log("TTS audio URL:", audioUrl);
+        return { audioUrl, language, pitchShift, slow };
+      }
+    } catch (error) {
+      console.error("Error during TTS generation:", error);
+      messageApi.error(error.message || "Failed to generate TTS.");
+      return null;
+    }
+  };
+
+  // Generate Multi-TTS and fetch audio files
+  // Generate Multi-TTS
+  const generateMultiTTS = async (text, messageApi, options = {}) => {
+    console.log("generateMultiTTS called with text:", text);
+    try {
+      const { language = "en", pitchShift = 1.0, slow = false } = options;
+      let token = localStorage.getItem(ACCESS_TOKEN);
+      if (!token) {
+        throw new Error("Authentication token missing. Please log in again.");
+      }
+  
+      const formData = new FormData();
+      formData.append("text", text);
+      formData.append("language", language);
+      formData.append("pitch_shift", pitchShift);
+      formData.append("slow", slow.toString());
+  
+      const response = await fetch("http://127.0.0.1:8000/api/tts/generate-multi-audio/", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+  
+      if (response.status === 401) {
+        console.log("401 error, refreshing token for multi-TTS generation");
+        token = await refreshToken();
+        const retryResponse = await fetch("http://127.0.0.1:8000/api/tts/generate-multi-audio/", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+        if (!retryResponse.ok) throw new Error("Failed to generate multi-TTS.");
+        const data = await retryResponse.json();
+        console.log("Multi-TTS response:", data);
+        return data.audios.map((audio, index) => ({
+          ...audio,
+          audioFile: base64ToFile(audio.audio_base64, `audio_${index}.mp3`, "audio/mpeg")
+        }));
+      } else if (!response.ok) {
+        throw new Error("Failed to generate multi-TTS.");
+      } else {
+        const data = await response.json();
+        console.log("Multi-TTS response:", data);
+        return data.audios.map((audio, index) => ({
+          ...audio,
+          audioFile: base64ToFile(audio.audio_base64, `audio_${index}.mp3`, "audio/mpeg")
+        }));
+      }
+    } catch (error) {
+      console.error("Error during multi-TTS generation:", error);
+      messageApi.error(error.message || "Failed to generate multi-TTS.");
+      return null;
+    }
+  };
 
   return (
     <div style={{ background: "#ebebec" }}>

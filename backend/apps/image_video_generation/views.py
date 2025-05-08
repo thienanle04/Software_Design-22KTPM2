@@ -13,7 +13,7 @@ from django.conf import settings
 import io
 import requests
 from gradio_client import Client, handle_file
-from moviepy import ImageSequenceClip, concatenate_videoclips, vfx
+from moviepy import ImageSequenceClip, concatenate_videoclips, AudioFileClip, CompositeAudioClip
 import tempfile
 import numpy as np
 from rest_framework.permissions import IsAuthenticated
@@ -22,6 +22,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Video, VideoImage
+from mutagen.mp3 import MP3
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -312,21 +313,27 @@ def create_video_from_images(request):
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
     try:
+        # Get parameters
         image_files = request.FILES.getlist('images')
+        audio_files = request.FILES.getlist('audios')
         fps = int(request.POST.get('fps', 24))
         durations = json.loads(request.POST.get('durations', '[]'))
         transition_duration = float(request.POST.get('transition_duration', 1.0))
-        prompt = request.POST.get('prompt', '')  # Get prompt from request
+        prompt = request.POST.get('prompt', '')
 
+        # Validate inputs
         if len(image_files) < 2:
             return JsonResponse({'error': 'At least 2 images are required'}, status=400)
         if not durations:
             return JsonResponse({'error': 'Durations list is required'}, status=400)
         if len(durations) != len(image_files):
             return JsonResponse({'error': 'Number of durations must match number of images'}, status=400)
+        if len(audio_files) != len(image_files):
+            return JsonResponse({'error': 'Number of audios must match number of images'}, status=400)
         if not all(isinstance(d, (int, float)) and d > 0 for d in durations):
             return JsonResponse({'error': 'All durations must be positive numbers'}, status=400)
 
+        # Set resolution
         base_width, base_height = None, None
         if resolution := request.POST.get('resolution'):
             base_width, base_height = map(int, resolution.split('x'))
@@ -336,7 +343,7 @@ def create_video_from_images(request):
             with Image.open(image_files[0]) as img:
                 base_width, base_height = img.size
         
-        # IMPORTANT: Ensure dimensions are even numbers (required by libx264)
+        # Ensure dimensions are even numbers (required by libx264)
         base_width = base_width - (base_width % 2)
         base_height = base_height - (base_height % 2)
 
@@ -348,20 +355,40 @@ def create_video_from_images(request):
             img_base64 = f"data:image/png;base64,{img_base64}"
             image_base64_list.append(img_base64)
         
-        # Create temporary directory for storing processed frames
+        # Create temporary directory for storing processed frames and audios
         with tempfile.TemporaryDirectory() as temp_dir:
             clips = []
-            effect_duration = 5.0 # Max duration for zoom effect
+            audio_clips = []
+            effect_duration = 5.0  # Max duration for zoom effect
+            current_time = 0.0  # Track start time for each clip
+
             # Process each image and create clips
 
-            for i, (img_file, duration) in enumerate(zip(image_files, durations)):
+            for i, (img_file, duration, audio_file) in enumerate(zip(image_files, durations, audio_files)):
                 img_dir = os.path.join(temp_dir, f"img_{i}")
                 os.makedirs(img_dir)
 
+                # Save audio file temporarily with explicit file closing
+                audio_path = os.path.join(temp_dir, f"audio_{i}.mp3")
+                with open(audio_path, 'wb') as f:
+                    f.write(audio_file.read())
+                    f.flush()  # Ensure all data is written
+                    os.fsync(f.fileno())  # Force write to disk
+
+                # Validate audio duration with mutagen
+                try:
+                    audio_info = MP3(audio_path)
+                    audio_duration = audio_info.info.length
+                except Exception as e:
+                    logger.error(f"Invalid audio file {audio_path}: {str(e)}")
+                    return JsonResponse({'error': f'Invalid audio file for clip {i+1}'}, status=400)
+
+                # Adjusted duration for overlap
                 adjusted_duration = duration + transition_duration if i < len(image_files) - 1 else duration
                 total_frames = int(fps * adjusted_duration)
                 effect_frames = int(min(adjusted_duration, effect_duration) * fps)
 
+                # Process image
                 with Image.open(img_file) as img:
                     img = img.resize((base_width, base_height), Image.LANCZOS)
                     base_frames = []
@@ -393,13 +420,35 @@ def create_video_from_images(request):
                         frame_path = os.path.join(img_dir, f"{j:06d}.jpg")
                         frame.save(frame_path, 'JPEG', quality=85)
 
-                clip = ImageSequenceClip(img_dir, fps=fps)
+                # Create video clip
+                clip = ImageSequenceClip(img_dir, fps=fps).with_duration(adjusted_duration)
                 clips.append(clip)
-            
-            # Use different concatenation approach
+
+                # Create audio clip with proper resource management
+                audio_clip = None
+                try:
+                    audio_clip = AudioFileClip(audio_path).with_start(current_time)
+                    if audio_duration > duration:
+                        audio_clip = audio_clip.subclip(0, duration)  # Trim to image duration
+                    audio_clips.append(audio_clip)
+                except Exception as e:
+                    logger.error(f"Failed to load audio clip {audio_path}: {str(e)}")
+                    if audio_clip:
+                        audio_clip.close()  # Ensure clip is closed on error
+                    return JsonResponse({'error': f'Failed to process audio clip {i+1}'}, status=500)
+
+                # Update current_time (no overlap for audio)
+                current_time += duration
+
+            # Concatenate video clips with transitions
             padding = -transition_duration if len(clips) > 1 else 0
             final_clip = concatenate_videoclips(clips, method="compose", padding=padding)
-            
+
+            # Combine audio clips
+            if audio_clips:
+                final_audio = CompositeAudioClip(audio_clips)
+                final_clip = final_clip.with_audio(final_audio)
+
             # Set output file path
             output_path = os.path.join(temp_dir, 'output.mp4')
             
@@ -407,18 +456,32 @@ def create_video_from_images(request):
             logger.info(f"Creating video with dimensions: {base_width}x{base_height} (both must be even)")
             
             # Write final video with optimized settings
-            final_clip.write_videofile(
-                output_path,
-                fps=fps,
-                codec='libx264',
-                audio=False,
-                threads=min(os.cpu_count() or 4, 8),
-                preset='faster',
-                ffmpeg_params=['-crf', '24', '-pix_fmt', 'yuv420p'],
-                logger=None,
-            )
-            
-            # Read and encode video with streaming to avoid loading entire file into memory
+            try:
+                final_clip.write_videofile(
+                    output_path,
+                    fps=fps,
+                    codec='libx264',
+                    audio_codec='aac',
+                    threads=min(os.cpu_count() or 4, 8),
+                    preset='faster',
+                    ffmpeg_params=['-crf', '24', '-pix_fmt', 'yuv420p'],
+                    logger=None,
+                )
+            except Exception as e:
+                logger.error(f"Failed to write video: {str(e)}")
+                return JsonResponse({'error': f'Video rendering failed: {str(e)}'}, status=500)
+            finally:
+                # Clean up MoviePy resources
+                for clip in clips:
+                    clip.close()
+                for audio_clip in audio_clips:
+                    audio_clip.close()
+                if 'final_audio' in locals():
+                    final_audio.close()
+                if 'final_clip' in locals():
+                    final_clip.close()
+
+            # Read and encode video
             with open(output_path, 'rb') as f:
                 video_data = f.read()
 
@@ -429,8 +492,9 @@ def create_video_from_images(request):
                 user=request.user,
                 video_base64=video_base64,
                 resolution=f"{base_width}x{base_height}",
-                frame_count=sum(int(fps * (durations[i] + (transition_duration if i < len(image_files) - 1 else 0))) for i in range(len(image_files))),
-                total_duration=final_clip.duration,
+                frame_count=sum(int(fps * (durations[i] + (transition_duration if i < len(image_files) - 1 else 0)))
+                               for i in range(len(image_files))),
+                total_duration=final_clip.duration if final_clip else sum(durations),
                 prompt=prompt
             )
 
@@ -440,21 +504,33 @@ def create_video_from_images(request):
                     image_base64=img_base64,
                     order=order + 1
                 )
-
+            
             return JsonResponse({
                 'video_id': video.id,
                 'video_base64': video_base64,
                 'resolution': f"{base_width}x{base_height}",
                 'frame_count': video.frame_count,
-                'total_duration': final_clip.duration,
+                'total_duration': final_clip.duration if final_clip else sum(durations),
                 'prompt': prompt
             })
-
+    
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid durations format'}, status=400)
     except Exception as e:
-        logger.error(f"Video generation error: {str(e)}")
+        logger.error(f"Video generation error: {str(e)}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
+    finally:
+        # Ensure any remaining MoviePy resources are closed
+        if 'clips' in locals():
+            for clip in clips:
+                clip.close()
+        if 'audio_clips' in locals():
+            for audio_clip in audio_clips:
+                audio_clip.close()
+        if 'final_audio' in locals():
+            final_audio.close()
+        if 'final_clip' in locals():
+            final_clip.close()
     
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])

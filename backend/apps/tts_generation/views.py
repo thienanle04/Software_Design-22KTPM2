@@ -10,6 +10,11 @@ from pydub import AudioSegment
 from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny
 from .models import Voice, GeneratedVoice
+import logging
+from mutagen.mp3 import MP3
+import base64
+
+logger = logging.getLogger(__name__)
 
 @method_decorator(csrf_exempt, name='dispatch')
 @permission_classes([AllowAny])
@@ -75,3 +80,106 @@ class GenerateAudioView(View):
 
         except Exception as e:
             return JsonResponse({'error': f'Failed to send file: {str(e)}'}, status=500)
+
+@method_decorator(csrf_exempt, name='dispatch')
+@permission_classes([AllowAny])
+class GenerateMultiAudioView(View):
+    def post(self, request):
+        try:
+            text = request.POST.get('text')
+            language = request.POST.get('language', 'en')
+            pitch_shift = float(request.POST.get('pitch_shift', 1.0))
+            slow = request.POST.get('slow', 'False').lower() == 'true'
+
+            if not text:
+                return JsonResponse({'error': 'Text is required'}, status=400)
+            if pitch_shift != 1.0:
+                logger.warning("Pitch shift requires FFmpeg and pydub. Using default pitch_shift=1.0.")
+                pitch_shift = 1.0
+
+            # Split text into paragraphs
+            paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
+            if not paragraphs:
+                return JsonResponse({'error': 'No valid paragraphs found'}, status=400)
+
+            # Create or get Voice object
+            voice, _ = Voice.objects.get_or_create(
+                provider='gTTS',
+                language=language,
+                voice_type='default'
+            )
+
+            audio_results = []
+            temp_files = []
+
+            for idx, paragraph in enumerate(paragraphs):
+                # Create temporary file
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+                    temp_path = temp_file.name
+
+                # Generate audio with gTTS
+                try:
+                    tts = gTTS(text=paragraph, lang=language, slow=slow)
+                    tts.save(temp_path)
+                except Exception as e:
+                    logger.error(f"Failed to generate audio for paragraph {idx+1}: {str(e)}")
+                    return JsonResponse({'error': f'Audio generation failed: {str(e)}'}, status=500)
+
+                # Get audio duration with mutagen
+                try:
+                    audio = MP3(temp_path)
+                    audio_duration = audio.info.length
+                except Exception as e:
+                    logger.error(f"Failed to get audio duration for paragraph {idx+1}: {str(e)}")
+                    return JsonResponse({'error': f'Failed to process audio duration: {str(e)}'}, status=500)
+
+                # Read and encode audio as base64
+                try:
+                    with open(temp_path, 'rb') as f:
+                        audio_data = f.read()
+                        audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+                except Exception as e:
+                    logger.error(f"Failed to encode audio for paragraph {idx+1}: {str(e)}")
+                    return JsonResponse({'error': f'Failed to encode audio: {str(e)}'}, status=500)
+
+                # Save to GeneratedVoice
+                generated_voice = GeneratedVoice.objects.create(
+                    voice=voice,
+                    text=paragraph,
+                    pitch_shift=pitch_shift,
+                    speed=1.0 if not slow else 0.5,
+                    duration=audio_duration
+                )
+                with open(temp_path, 'rb') as f:
+                    django_file = File(f, name=f'audio_{generated_voice.id}.mp3')
+                    generated_voice.audio_file = django_file
+                    generated_voice.save()
+
+                # Store result
+                audio_results.append({
+                    'id': generated_voice.id,
+                    'text': paragraph,
+                    'audio_base64': audio_base64,
+                    'pitch_shift': pitch_shift,
+                    'speed': 1.0 if not slow else 0.5,
+                    'duration': audio_duration
+                })
+                temp_files.append(temp_path)
+
+            # Return JSON response
+            response = JsonResponse({'audios': audio_results})
+
+            # Clean up temporary files
+            def cleanup():
+                for temp_path in temp_files:
+                    try:
+                        os.remove(temp_path)
+                    except Exception:
+                        pass
+
+            response.close = cleanup
+            return response
+
+        except Exception as e:
+            logger.error(f"GenerateMultiAudioView error: {str(e)}", exc_info=True)
+            return JsonResponse({'error': f'Failed to generate audios: {str(e)}'}, status=500)
