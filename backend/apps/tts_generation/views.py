@@ -1,7 +1,6 @@
 import tempfile
 import os
 import logging
-import conf  # Import conf.py để load IMAGEMAGICK_BINARY
 from django.http import FileResponse, JsonResponse
 from django.views import View
 from django.utils.decorators import method_decorator
@@ -16,12 +15,12 @@ from .models import Voice, GeneratedVoice
 import logging
 from mutagen.mp3 import MP3
 import base64
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes
+
 
 logger = logging.getLogger(__name__)
-logging.getLogger("google.api_core").setLevel(logging.ERROR)
-logging.getLogger("google.auth").setLevel(logging.ERROR)
-logging.getLogger("google.auth.transport.requests").setLevel(logging.ERROR)
-logging.getLogger("gtts").setLevel(logging.ERROR)
+
 @method_decorator(csrf_exempt, name='dispatch')
 @permission_classes([AllowAny])
 class GenerateAudioView(View):
@@ -337,3 +336,39 @@ class GenerateVideoView(View):
             logger.error(f"Error generating video: {str(e)}")
             cleanup()
             return JsonResponse({'error': f'Failed to generate video: {str(e)}'}, status=500)
+        
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_all_audios(request):
+    """
+    Delete all GeneratedVoice records and their associated audio files.
+    """
+    try:
+        # Get all GeneratedVoice records
+        voices = GeneratedVoice.objects.all()
+        count = voices.count()
+
+        # Delete associated audio files from disk
+        for voice in voices:
+            if voice.audio_file and os.path.exists(voice.audio_file.path):
+                try:
+                    os.remove(voice.audio_file.path)
+                    logger.info(f"Deleted audio file: {voice.audio_file.path}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete audio file {voice.audio_file.path}: {str(e)}")
+
+        # Delete all records from the database
+        voices.delete()
+        logger.info(f"Deleted {count} GeneratedVoice records")
+
+        return JsonResponse({
+            'message': f'Successfully deleted {count} audio entries',
+            'count': count
+        }, status=200)
+
+    except Exception as e:
+        logger.error(f"Error deleting audio entries: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'error': f'Failed to delete audio entries: {str(e)}'
+        }, status=500)

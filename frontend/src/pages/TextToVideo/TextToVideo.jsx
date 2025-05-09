@@ -761,60 +761,6 @@ const TextToVideo = () => {
     return <Spin size="large" style={{ display: "block", margin: "50px auto" }} />;
   }
 
-  const generateTTS = async (text, messageApi, options = {}) => {
-    console.log("generateTTS called with text:", text);
-    try {
-      const { language = "en", pitchShift = 1.0, slow = false } = options;
-      let token = localStorage.getItem(ACCESS_TOKEN);
-      if (!token) {
-        throw new Error("Authentication token missing. Please log in again.");
-      }
-  
-      const formData = new FormData();
-      formData.append("text", text);
-      formData.append("language", language);
-      formData.append("pitch_shift", pitchShift);
-      formData.append("slow", slow.toString());
-  
-      const response = await fetch("http://127.0.0.1:8000/api/tts/generate-audio/", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-  
-      if (response.status === 401) {
-        console.log("401 error, refreshing token for TTS generation");
-        token = await refreshToken();
-        const retryResponse = await fetch("http://127.0.0.1:8000/api/tts/generate-audio/", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        });
-        if (!retryResponse.ok) throw new Error("Failed to generate TTS.");
-        const blob = await retryResponse.blob();
-        const audioUrl = URL.createObjectURL(blob);
-        console.log("TTS audio URL:", audioUrl);
-        return { audioUrl, language, pitchShift, slow };
-      } else if (!response.ok) {
-        throw new Error("Failed to generate TTS.");
-      } else {
-        const blob = await response.blob();
-        const audioUrl = URL.createObjectURL(blob);
-        console.log("TTS audio URL:", audioUrl);
-        return { audioUrl, language, pitchShift, slow };
-      }
-    } catch (error) {
-      console.error("Error during TTS generation:", error);
-      messageApi.error(error.message || "Failed to generate TTS.");
-      return null;
-    }
-  };
-
-  // Generate Multi-TTS and fetch audio files
   // Generate Multi-TTS
   const generateMultiTTS = async (text, messageApi, options = {}) => {
     console.log("generateMultiTTS called with text:", text);
