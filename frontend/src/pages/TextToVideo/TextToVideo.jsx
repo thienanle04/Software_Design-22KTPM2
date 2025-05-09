@@ -104,6 +104,8 @@ const TextToVideo = () => {
   const [videoData, setVideoData] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [audioPrompt, setAudioPrompt] = useState("");
   const [tab, setTab] = useState("My Creations");
   const [mycreationList, setVideoList] = useState([]);
   const [inspirationList, setInspirationList] = useState(inspirations);
@@ -254,6 +256,15 @@ const TextToVideo = () => {
   const fetchScienceStory = async (simplifiedPrompt) => {
     setStoryLoading(true);
     try {
+      // Normalize any line breaks or special characters in the story format
+      const normalizeText = (text) => {
+        if (!text) return "";
+        return text
+          .replace(/\r\n/g, '\n')  // Normalize line endings
+          .replace(/\u2013|\u2014/g, '-')  // Replace em/en dashes with regular dashes
+          .trim();
+      };
+      
       let token = localStorage.getItem(ACCESS_TOKEN);
       if (!token) {
         messageApi.error("Authentication token missing.");
@@ -287,19 +298,27 @@ const TextToVideo = () => {
         });
         if (!retryResponse.ok) throw new Error("Failed to generate science story.");
         const data = await retryResponse.json();
-        console.log("Science story response:", data);
+        
+        // Normalize the story text before processing
+        const normalizedStory = normalizeText(data.story);
+        console.log("Normalized story:", normalizedStory);
+        
         return {
-          imagePrompt: processStory(data.story, simplifiedPrompt),
-          audioPrompt: extractNarration(data.story, simplifiedPrompt),
+          imagePrompt: processStory(normalizedStory, simplifiedPrompt),
+          audioPrompt: extractNarration(normalizedStory, simplifiedPrompt),
         };
       } else if (!response.ok) {
         throw new Error("Failed to generate science story.");
       } else {
         const data = await response.json();
-        console.log("Science story response:", data);
+        
+        // Normalize the story text before processing
+        const normalizedStory = normalizeText(data.story);
+        console.log("Normalized story:", normalizedStory);
+        
         return {
-          imagePrompt: processStory(data.story, simplifiedPrompt),
-          audioPrompt: extractNarration(data.story, simplifiedPrompt),
+          imagePrompt: processStory(normalizedStory, simplifiedPrompt),
+          audioPrompt: extractNarration(normalizedStory, simplifiedPrompt),
         };
       }
     } catch (error) {
@@ -316,41 +335,144 @@ const TextToVideo = () => {
 
   // Extract Visual Descriptions from story
   const processStory = (story, simplifiedPrompt) => {
-    const visualDescRegex = /- \*\*Visual Description\*\*: (.*?)(?=\n- \*\*Sound Effects \/ Music\*\*:|\n\n|### SCENE|\n### FINAL SECTION|$)/gs;
-    const visualDescriptions = [];
-    let match;
-    while ((match = visualDescRegex.exec(story)) !== null) {
-      visualDescriptions.push(match[1].trim());
-    }
-  
-    if (visualDescriptions.length > 0) {
-      const combinedPrompt = visualDescriptions.join("\n");
-      setPrompt(combinedPrompt);
-      return combinedPrompt;
-    } else {
-      messageApi.warning("No visual descriptions found in story. Using simplified prompt.");
+    if (!story || typeof story !== 'string') {
+      console.error("Invalid story content:", story);
+      messageApi.warning("Invalid story content. Using simplified prompt.");
       setPrompt(simplifiedPrompt);
       return simplifiedPrompt;
     }
+  
+    // More flexible regex that handles variations in formatting
+    const visualDescRegex = /\*\*Visual Description\*\*:?\s*([\s\S]*?)(?=\n\s*\*\*Sound Effects|\n\s*\*\*Sound Effects\/Music|### SCENE|\n### FINAL SECTION|$)/g;
     
+    const visualDescriptions = [];
+    let match;
+    let regex = visualDescRegex;
+    
+    // Try the primary regex
+    while ((match = regex.exec(story)) !== null) {
+      if (match[1] && match[1].trim()) {
+        let cleanedText = match[1].trim().replace(/^\*\*\s*/, '');
+        visualDescriptions.push(cleanedText);
+      }
+    }
+    
+    // If the primary regex failed, try multiple alternative patterns
+    if (visualDescriptions.length === 0) {
+      
+      // Alternative 1: Find content between "Visual Description" and the next heading/marker
+      const altRegex1 = /Visual Description[^\n]*\n([\s\S]*?)(?=\n-|\n\n|### SCENE|\n### FINAL SECTION|$)/g;
+      while ((match = altRegex1.exec(story)) !== null) {
+        if (match[1] && match[1].trim()) {
+          let cleanedText = match[1].trim().replace(/^\*\*\s*/, '');
+          visualDescriptions.push(cleanedText);
+        }
+      }
+      
+      // Alternative 2: Even more relaxed pattern
+      if (visualDescriptions.length === 0) {
+        const altRegex2 = /Visual Description[^:]*:([\s\S]*?)(?=\n-|\n\n|Sound Effects|### SCENE|\n### FINAL SECTION|$)/gi;
+        while ((match = altRegex2.exec(story)) !== null) {
+          if (match[1] && match[1].trim()) {
+            let cleanedText = match[1].trim().replace(/^\*\*\s*/, '');
+            visualDescriptions.push(cleanedText);
+          }
+        }
+      }
+      
+      // Alternative 3: Look for patterns after bullet points or dashes
+      if (visualDescriptions.length === 0) {
+        const altRegex3 = /- .*?Visual Description.*?\n([\s\S]*?)(?=\n-|\n\n|### SCENE|\n### FINAL SECTION|$)/gi;
+        while ((match = altRegex3.exec(story)) !== null) {
+          if (match[1] && match[1].trim()) {
+            let cleanedText = match[1].trim().replace(/^\*\*\s*/, '');
+            visualDescriptions.push(cleanedText);
+          }
+        }
+      }
+      
+      console.log("Alternative regexes found visual descriptions:", visualDescriptions);
+    }
+
+    if (visualDescriptions.length > 0) {
+      const combinedPrompt = visualDescriptions.join("\n");
+      setImagePrompt(combinedPrompt);
+      return combinedPrompt;
+    } else {
+      messageApi.warning("No visual descriptions found in story. Using simplified prompt.");
+      console.error("Failed to extract visual descriptions. Story content:", story);
+      setImagePrompt(simplifiedPrompt);
+      return simplifiedPrompt;
+    }
   };
 
   const extractNarration = (story, simplifiedPrompt) => {
-    const narrationRegex = /- \*\*Narration\*\*: (.*?)(?=\n- \*\*(Dialogue|Visual Description|Sound Effects \/ Music)\*\*:|\n\n|### SCENE|\n### FINAL SECTION|$)/gs;
+    if (!story || typeof story !== 'string') {
+      console.error("Invalid story content:", story);
+      messageApi.warning("Invalid story content. Using simplified prompt.");
+      setAudioPrompt(simplifiedPrompt);
+      return simplifiedPrompt;
+    }
+    
+    // More flexible regex that handles variations in formatting
+    const narrationRegex = /\*\*Narration\*\*:?\s*([\s\S]*?)(?=\n\s*\*\*Visual Description|\n\s*\*\*Dialogue|\n\s*\*\*Sound Effects|\n\s*\*\*Sound Effects\/Music|### SCENE|\n### FINAL SECTION|$)/g;
+    
     const narrationBlocks = [];
     let match;
 
+    // Try the primary regex
     while ((match = narrationRegex.exec(story)) !== null) {
-      narrationBlocks.push(match[1].trim());
+      if (match[1] && match[1].trim()) {
+        let cleanedText = match[1].trim().replace(/^\*\*\s*/, '');
+        narrationBlocks.push(cleanedText);
+      }
+    }
+    
+    // If the primary regex failed, try multiple alternative patterns
+    if (narrationBlocks.length === 0) {
+      
+      // Alternative 1: Find content between "Narration" and the next heading/marker
+      const altRegex1 = /Narration[^\n]*\n([\s\S]*?)(?=\n-|\n\n|### SCENE|\n### FINAL SECTION|$)/g;
+      while ((match = altRegex1.exec(story)) !== null) {
+        if (match[1] && match[1].trim()) {
+          let cleanedText = match[1].trim().replace(/^\*\*\s*/, '');
+          narrationBlocks.push(cleanedText);
+        }
+      }
+      
+      // Alternative 2: Even more relaxed pattern
+      if (narrationBlocks.length === 0) {
+        const altRegex2 = /Narration[^:]*:([\s\S]*?)(?=\n-|\n\n|Visual Description|### SCENE|\n### FINAL SECTION|$)/gi;
+        while ((match = altRegex2.exec(story)) !== null) {
+          if (match[1] && match[1].trim()) {
+            let cleanedText = match[1].trim().replace(/^\*\*\s*/, '');
+            narrationBlocks.push(cleanedText);
+          }
+        }
+      }
+      
+      // Alternative 3: Look for patterns after bullet points or dashes
+      if (narrationBlocks.length === 0) {
+        const altRegex3 = /- .*?Narration.*?\n([\s\S]*?)(?=\n-|\n\n|### SCENE|\n### FINAL SECTION|$)/gi;
+        while ((match = altRegex3.exec(story)) !== null) {
+          if (match[1] && match[1].trim()) {
+            let cleanedText = match[1].trim().replace(/^\*\*\s*/, '');
+            narrationBlocks.push(cleanedText);
+          }
+        }
+      }
+      
+      console.log("Alternative regexes found narration blocks:", narrationBlocks);
     }
 
     if (narrationBlocks.length > 0) {
       const combinedPrompt = narrationBlocks.join("\n");
-      setPrompt(combinedPrompt);
+      setAudioPrompt(combinedPrompt);
       return combinedPrompt;
     } else {
       messageApi.warning("No narration found in story. Using simplified prompt.");
-      setPrompt(simplifiedPrompt);
+      console.error("Failed to extract narration. Story content:", story);
+      setAudioPrompt(simplifiedPrompt);
       return simplifiedPrompt;
     }
   };
@@ -496,6 +618,7 @@ const TextToVideo = () => {
 
       setGeneratedImages(validImages);
       messageApi.success("Images generated successfully!");
+      return validImages;
     } catch (error) {
       console.error("Error during image generation:", error);
       messageApi.error(error.message || "Failed to generate images.");
@@ -530,10 +653,8 @@ const TextToVideo = () => {
         const { imagePrompt: fetchedImagePrompt, audioPrompt: fetchedAudioPrompt } = await fetchScienceStory(prompt);
         imagePrompt = fetchedImagePrompt;
         audioPrompt = fetchedAudioPrompt;
-      }
 
-      // Step 2: Generate audios if not already generated
-      if (audios.length === 0) {
+        // Step 2: Generate audios if not already generated
         audios = await generateMultiTTS(audioPrompt, messageApi, {
           language: "en",
           pitchShift: 1.0,
@@ -543,80 +664,78 @@ const TextToVideo = () => {
           throw new Error(`Not enough audios generated (${audios ? audios.length : 0}). Minimum 2 required.`);
         }
         setGeneratedAudios(audios);
-      }
 
-      // Step 3: Generate images if not already generated
-      if (generatedImages.length === 0) {
+        // Step 3: Generate images if not already generated
         images = await generateImages(imagePrompt);
         if (images.length < 2) {
           throw new Error(`Not enough images generated (${generatedImages.length}). Minimum 2 required.`);
         }
-      }
-
-
-      // Step 4: Generate video with images and audios
-      const imageFiles = generatedImages
+      } else {
+        // Step 4: Generate video with images and audios
+        const imageFiles = generatedImages
         .filter((img) => img)
         .map((base64, index) => base64ToFile(base64, `image_${index}.png`));
 
       
-      if (generatedImages.length !== audios.length) {
-        throw new Error(`Final image-audio mismatch after processing. Images: ${generatedImages.length}, Audios: ${audios.length}`);
-      }
+        if (images.length !== audios.length) {
+          throw new Error(`Final image-audio mismatch after processing. Images: ${images.length}, Audios: ${audios.length}`);
+        }
 
-      const durations = audios.map(audio => audio.duration);
-      const audioFiles = audios.map(audio => audio.audioFile);
+        const durations = audios.map(audio => audio.duration);
+        const audioFiles = audios.map(audio => audio.audioFile);
 
-      const formData = new FormData();
-      imageFiles.forEach((file) => formData.append("images", file));
-      audioFiles.forEach((file) => formData.append("audios", file));
-      formData.append("fps", 24);
-      formData.append("durations", JSON.stringify(durations));
-      formData.append("transition_duration", 1.0);
-      formData.append("prompt", prompt);
+        const formData = new FormData();
+        imageFiles.forEach((file) => formData.append("images", file));
+        audioFiles.forEach((file) => formData.append("audios", file));
+        formData.append("fps", 24);
+        formData.append("durations", JSON.stringify(durations));
+        formData.append("transition_duration", 1.0);
+        formData.append("prompt", prompt);
 
-      let token = localStorage.getItem(ACCESS_TOKEN);
-      if (!token) {
-        throw new Error("Authentication token missing. Please log in again.");
-      }
+        let token = localStorage.getItem(ACCESS_TOKEN);
+        if (!token) {
+          throw new Error("Authentication token missing. Please log in again.");
+        }
 
-      let videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (videoResponse.status === 401) {
-        token = await refreshToken();
-        videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
+        let videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${token}`,
           },
           body: formData,
         });
+
+        if (videoResponse.status === 401) {
+          token = await refreshToken();
+          videoResponse = await fetch("http://127.0.0.1:8000/api/image-video/create-video-from-images/", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+            },
+            body: formData,
+          });
+        }
+
+        const videoData = await videoResponse.json();
+        if (videoResponse.ok && videoData.video_base64) {
+          const newVideo = {
+            id: videoData.video_id,
+            url: `data:video/mp4;base64,${videoData.video_base64}`,
+            prompt: videoData.prompt,
+            script: videoData.prompt,
+            image_ids: [],
+          };
+          setGeneratedVideo(newVideo.url);
+          setVideoList([newVideo, ...mycreationList]);
+          setGeneratedImages([]); // Clear images after video generation
+          setGeneratedAudios([]); // Clear audios after video generation
+          messageApi.success("Video with audio generated and saved successfully!");
+          closeModal();
+        } else {
+          throw new Error(videoData.error || "Video generation failed.");
+        }
       }
 
-      const videoData = await videoResponse.json();
-      if (videoResponse.ok && videoData.video_base64) {
-        const newVideo = {
-          id: videoData.video_id,
-          url: `data:video/mp4;base64,${videoData.video_base64}`,
-          prompt: videoData.prompt,
-          script: videoData.prompt,
-          image_ids: [],
-        };
-        setGeneratedVideo(newVideo.url);
-        setVideoList([newVideo, ...mycreationList]);
-        setGeneratedImages([]); // Clear images after video generation
-        setGeneratedAudios([]); // Clear audios after video generation
-        messageApi.success("Video with audio generated and saved successfully!");
-        closeModal();
-      } else {
-        throw new Error(videoData.error || "Video generation failed.");
-      }
     } catch (error) {
       console.error("Error during generation:", error);
       messageApi.error(error.message || "Failed to generate video.");
@@ -635,7 +754,7 @@ const TextToVideo = () => {
       messageApi.warning("Please wait, generating story...");
       return;
     }
-    await generateImages(prompt);
+    await generateImages(imagePrompt);
   };
 
   if (authLoading) {
