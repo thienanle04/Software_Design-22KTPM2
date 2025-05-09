@@ -26,13 +26,7 @@ from mutagen.mp3 import MP3
 
 # Set up logging
 logger = logging.getLogger(__name__)
-logging.getLogger("google.api_core").setLevel(logging.ERROR)
-logging.getLogger("google.auth").setLevel(logging.ERROR)
-logging.getLogger("google.auth.transport.requests").setLevel(logging.ERROR)
-logging.getLogger("gtts").setLevel(logging.ERROR)
-logging.getLogger("urllib3").setLevel(logging.ERROR)
-logging.getLogger("httpcore").setLevel(logging.ERROR)
-logging.getLogger("httpx").setLevel(logging.ERROR)
+
 # Configure Google API key
 
 GOOGLE_API_KEY = settings.GOOGLE_API_KEY
