@@ -92,21 +92,26 @@ function Dashboard() {
       });
 
       const data = await response.json();
-      console.log("API Response:", data.simplified_explanation);
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to generate simplified explanation");
+      // 2️⃣ Kiểm tra xem response có dữ liệu hợp lệ không
+      if (!data?.simplified_explanation) {
+        throw new Error("Invalid response: No explanation data received");
+      }
+      if (!data?.simplified_explanation.includes("[AI errror]")) {
+        throw new Error("Invalid response: AI error detected");
       }
 
+      // ✅ Chỉ navigate khi KHÔNG có lỗi
       navigate("/dashboard/tools/text-to-video", {
         state: {
-          prompt: data.simplified_explanation
-        }
+          prompt: data.simplified_explanation,
+        },
       });
 
     } catch (error) {
       console.error("API Error:", error);
       messageApi.error(error.message || "Failed to process your request");
+      // ❌ KHÔNG navigate nếu có lỗi
     } finally {
       setLoading(false);
     }
