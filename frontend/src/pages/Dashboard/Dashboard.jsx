@@ -97,7 +97,7 @@ function Dashboard() {
       if (!data?.simplified_explanation) {
         throw new Error("Invalid response: No explanation data received");
       }
-      if (!data?.simplified_explanation.includes("[AI errror]")) {
+      if (data?.simplified_explanation.includes("[AI errror]")) {
         throw new Error("Invalid response: AI error detected");
       }
 

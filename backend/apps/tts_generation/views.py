@@ -17,6 +17,7 @@ from mutagen.mp3 import MP3
 import base64
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
+from elevenlabs import ElevenLabs
 
 
 logger = logging.getLogger(__name__)
@@ -109,11 +110,117 @@ class GenerateAudioView(View):
 
             return JsonResponse({'error': f'Failed to send file: {str(e)}'}, status=500)
 
+# @method_decorator(csrf_exempt, name='dispatch')
+# @permission_classes([AllowAny])
+# class GenerateMultiAudioView(View):
+#     def post(self, request):
+#         try:
+#             text = request.POST.get('text')
+#             language = request.POST.get('language', 'en')
+#             pitch_shift = float(request.POST.get('pitch_shift', 1.0))
+#             slow = request.POST.get('slow', 'False').lower() == 'true'
+
+#             if not text:
+#                 return JsonResponse({'error': 'Text is required'}, status=400)
+#             if pitch_shift != 1.0:
+#                 logger.warning("Pitch shift requires FFmpeg and pydub. Using default pitch_shift=1.0.")
+#                 pitch_shift = 1.0
+
+#             # Split text into paragraphs
+#             paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
+#             if not paragraphs:
+#                 return JsonResponse({'error': 'No valid paragraphs found'}, status=400)
+
+#             # Create or get Voice object
+#             voice, _ = Voice.objects.get_or_create(
+#                 provider='gTTS',
+#                 language=language,
+#                 voice_type='default'
+#             )
+
+#             audio_results = []
+#             temp_files = []
+
+#             for idx, paragraph in enumerate(paragraphs):
+#                 # Create temporary file
+#                 with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+#                     temp_path = temp_file.name
+
+#                 # Generate audio with gTTS
+#                 try:
+#                     tts = gTTS(text=paragraph, lang=language, slow=slow)
+#                     tts.save(temp_path)
+#                 except Exception as e:
+#                     logger.error(f"Failed to generate audio for paragraph {idx+1}: {str(e)}")
+#                     return JsonResponse({'error': f'Audio generation failed: {str(e)}'}, status=500)
+
+#                 # Get audio duration with mutagen
+#                 try:
+#                     audio = MP3(temp_path)
+#                     audio_duration = audio.info.length
+#                 except Exception as e:
+#                     logger.error(f"Failed to get audio duration for paragraph {idx+1}: {str(e)}")
+#                     return JsonResponse({'error': f'Failed to process audio duration: {str(e)}'}, status=500)
+
+#                 # Read and encode audio as base64
+#                 try:
+#                     with open(temp_path, 'rb') as f:
+#                         audio_data = f.read()
+#                         audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+#                 except Exception as e:
+#                     logger.error(f"Failed to encode audio for paragraph {idx+1}: {str(e)}")
+#                     return JsonResponse({'error': f'Failed to encode audio: {str(e)}'}, status=500)
+
+#                 # Save to GeneratedVoice
+#                 generated_voice = GeneratedVoice.objects.create(
+#                     voice=voice,
+#                     text=paragraph,
+#                     pitch_shift=pitch_shift,
+#                     speed=1.0 if not slow else 0.5,
+#                     duration=audio_duration
+#                 )
+#                 with open(temp_path, 'rb') as f:
+#                     django_file = File(f, name=f'audio_{generated_voice.id}.mp3')
+#                     generated_voice.audio_file = django_file
+#                     generated_voice.save()
+
+#                 # Store result
+#                 audio_results.append({
+#                     'id': generated_voice.id,
+#                     'text': paragraph,
+#                     'audio_base64': audio_base64,
+#                     'pitch_shift': pitch_shift,
+#                     'speed': 1.0 if not slow else 0.5,
+#                     'duration': audio_duration
+#                 })
+#                 temp_files.append(temp_path)
+
+#             # Return JSON response
+#             response = JsonResponse({'audios': audio_results})
+
+#             # Clean up temporary files
+#             def cleanup():
+#                 for temp_path in temp_files:
+#                     try:
+#                         os.remove(temp_path)
+#                     except Exception:
+#                         pass
+
+#             response.close = cleanup
+#             return response
+
+#         except Exception as e:
+#             logger.error(f"GenerateMultiAudioView error: {str(e)}", exc_info=True)
+#             return JsonResponse({'error': f'Failed to generate audios: {str(e)}'}, status=500)
+        
+
+
 @method_decorator(csrf_exempt, name='dispatch')
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 class GenerateMultiAudioView(View):
     def post(self, request):
         try:
+            # Get parameters
             text = request.POST.get('text')
             language = request.POST.get('language', 'en')
             pitch_shift = float(request.POST.get('pitch_shift', 1.0))
@@ -121,9 +228,17 @@ class GenerateMultiAudioView(View):
 
             if not text:
                 return JsonResponse({'error': 'Text is required'}, status=400)
+
+            # Log warning for pitch_shift (ElevenLabs doesn't support direct pitch shift)
             if pitch_shift != 1.0:
-                logger.warning("Pitch shift requires FFmpeg and pydub. Using default pitch_shift=1.0.")
-                pitch_shift = 1.0
+                logger.warning("ElevenLabs does not support pitch_shift. Using stability adjustment.")
+                # Map pitch_shift to stability (0.0 to 1.0)
+                stability = max(0.0, min(1.0, 1.0 / pitch_shift))
+            else:
+                stability = 0.5  # Default stability
+
+            # Map slow to speed (ElevenLabs doesn't have a direct slow parameter)
+            speed = 0.8 if slow else 1.0  # Approximate slow effect
 
             # Split text into paragraphs
             paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
@@ -132,26 +247,49 @@ class GenerateMultiAudioView(View):
 
             # Create or get Voice object
             voice, _ = Voice.objects.get_or_create(
-                provider='gTTS',
+                provider='ElevenLabs',
                 language=language,
-                voice_type='default'
+                voice_type='JBFqnCBsd6RMkjVDRZzb'  # Match voice_id
             )
 
             audio_results = []
             temp_files = []
 
-            for idx, paragraph in enumerate(paragraphs):
-                # Create temporary file
-                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
-                    temp_path = temp_file.name
+            # Initialize ElevenLabs client
+            api_key = os.getenv('ELEVEN_LABS_API_KEY')
+            if not api_key:
+                return JsonResponse({'error': 'ElevenLabs API key not configured'}, status=500)
+            client = ElevenLabs(api_key=api_key)
 
-                # Generate audio with gTTS
+            for idx, paragraph in enumerate(paragraphs):
+                # Generate audio with ElevenLabs
                 try:
-                    tts = gTTS(text=paragraph, lang=language, slow=slow)
-                    tts.save(temp_path)
+                    logger.info(f"Generating audio for paragraph {idx+1}: {paragraph[:50]}...")
+                    audio_stream = client.text_to_speech.convert(
+                        text=paragraph,
+                        voice_id="JBFqnCBsd6RMkjVDRZzb",
+                        model_id="eleven_flash_v2_5",
+                        output_format="mp3_44100_128",
+                        voice_settings={
+                            "stability": stability,
+                            "similarity_boost": 0.5,
+                            "style": 0.0,
+                            "use_speaker_boost": True
+                        }
+                    )
+
+                    # Read audio data
+                    audio_data = b''
+                    for chunk in audio_stream:
+                        audio_data += chunk
                 except Exception as e:
                     logger.error(f"Failed to generate audio for paragraph {idx+1}: {str(e)}")
                     return JsonResponse({'error': f'Audio generation failed: {str(e)}'}, status=500)
+
+                # Save to temporary file
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+                    temp_path = temp_file.name
+                    temp_file.write(audio_data)
 
                 # Get audio duration with mutagen
                 try:
@@ -161,11 +299,9 @@ class GenerateMultiAudioView(View):
                     logger.error(f"Failed to get audio duration for paragraph {idx+1}: {str(e)}")
                     return JsonResponse({'error': f'Failed to process audio duration: {str(e)}'}, status=500)
 
-                # Read and encode audio as base64
+                # Encode audio as base64
                 try:
-                    with open(temp_path, 'rb') as f:
-                        audio_data = f.read()
-                        audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+                    audio_base64 = base64.b64encode(audio_data).decode('utf-8')
                 except Exception as e:
                     logger.error(f"Failed to encode audio for paragraph {idx+1}: {str(e)}")
                     return JsonResponse({'error': f'Failed to encode audio: {str(e)}'}, status=500)
@@ -175,7 +311,7 @@ class GenerateMultiAudioView(View):
                     voice=voice,
                     text=paragraph,
                     pitch_shift=pitch_shift,
-                    speed=1.0 if not slow else 0.5,
+                    speed=speed,
                     duration=audio_duration
                 )
                 with open(temp_path, 'rb') as f:
@@ -189,7 +325,7 @@ class GenerateMultiAudioView(View):
                     'text': paragraph,
                     'audio_base64': audio_base64,
                     'pitch_shift': pitch_shift,
-                    'speed': 1.0 if not slow else 0.5,
+                    'speed': speed,
                     'duration': audio_duration
                 })
                 temp_files.append(temp_path)
@@ -202,6 +338,7 @@ class GenerateMultiAudioView(View):
                 for temp_path in temp_files:
                     try:
                         os.remove(temp_path)
+                        logger.info(f"Cleaned up temporary file: {temp_path}")
                     except Exception:
                         pass
 
@@ -211,6 +348,7 @@ class GenerateMultiAudioView(View):
         except Exception as e:
             logger.error(f"GenerateMultiAudioView error: {str(e)}", exc_info=True)
             return JsonResponse({'error': f'Failed to generate audios: {str(e)}'}, status=500)
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 @permission_classes([AllowAny])

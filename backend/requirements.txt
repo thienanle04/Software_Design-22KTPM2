@@ -23,3 +23,5 @@ google.generativeai
 gtts
 pydub
 mutagen
+imageio_ffmpeg
+elevenlabs

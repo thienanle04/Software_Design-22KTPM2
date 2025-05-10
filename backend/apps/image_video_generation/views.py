@@ -23,6 +23,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Video, VideoImage
 from mutagen.mp3 import MP3
+import subprocess
+from imageio_ffmpeg import get_ffmpeg_exe
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -317,7 +319,7 @@ def create_video_from_images(request):
         # Get parameters
         image_files = request.FILES.getlist('images')
         audio_files = request.FILES.getlist('audios')
-        fps = int(request.POST.get('fps', 24))
+        fps = int(request.POST.get('fps', 12))
         durations = json.loads(request.POST.get('durations', '[]'))
         transition_duration = float(request.POST.get('transition_duration', 1.0))
         prompt = request.POST.get('prompt', '')
@@ -363,18 +365,29 @@ def create_video_from_images(request):
             effect_duration = 5.0  # Max duration for zoom effect
             current_time = 0.0  # Track start time for each clip
 
-            # Process each image and create clips
+            # Find FFmpeg executable
+            ffmpeg_path = get_ffmpeg_exe()  # Default to 'ffmpeg' in PATH
+            # Optional: Specify full path if PATH is not set, e.g., 'C:/ffmpeg/bin/ffmpeg.exe'
+            # ffmpeg_path = 'C:/ffmpeg/bin/ffmpeg.exe'
 
+            # Verify FFmpeg is accessible
+            try:
+                subprocess.run([ffmpeg_path, '-version'], capture_output=True, check=True)
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                logger.error(f"FFmpeg not found or inaccessible: {str(e)}")
+                return JsonResponse({'error': 'FFmpeg is not installed or not found in PATH'}, status=500)
+
+            # Process each image and create clips
             for i, (img_file, duration, audio_file) in enumerate(zip(image_files, durations, audio_files)):
                 img_dir = os.path.join(temp_dir, f"img_{i}")
                 os.makedirs(img_dir)
 
-                # Save audio file temporarily with explicit file closing
+                # Save audio file temporarily
                 audio_path = os.path.join(temp_dir, f"audio_{i}.mp3")
                 with open(audio_path, 'wb') as f:
                     f.write(audio_file.read())
-                    f.flush()  # Ensure all data is written
-                    os.fsync(f.fileno())  # Force write to disk
+                    f.flush()
+                    os.fsync(f.fileno())
 
                 # Validate audio duration with mutagen
                 try:
@@ -425,17 +438,17 @@ def create_video_from_images(request):
                 clip = ImageSequenceClip(img_dir, fps=fps).with_duration(adjusted_duration)
                 clips.append(clip)
 
-                # Create audio clip with proper resource management
+                # Create audio clip
                 audio_clip = None
                 try:
                     audio_clip = AudioFileClip(audio_path).with_start(current_time)
                     if audio_duration > duration:
-                        audio_clip = audio_clip.subclip(0, duration)  # Trim to image duration
+                        audio_clip = audio_clip.subclip(0, duration)
                     audio_clips.append(audio_clip)
                 except Exception as e:
                     logger.error(f"Failed to load audio clip {audio_path}: {str(e)}")
                     if audio_clip:
-                        audio_clip.close()  # Ensure clip is closed on error
+                        audio_clip.close()
                     return JsonResponse({'error': f'Failed to process audio clip {i+1}'}, status=500)
 
                 # Update current_time (no overlap for audio)
@@ -454,20 +467,112 @@ def create_video_from_images(request):
             output_path = os.path.join(temp_dir, 'output.mp4')
             
             # Debug information
-            logger.info(f"Creating video with dimensions: {base_width}x{base_height} (both must be even)")
+            logger.info(f"Creating video with dimensions: {base_width}x{base_height}")
             
             # Write final video with optimized settings
             try:
-                final_clip.write_videofile(
-                    output_path,
-                    fps=fps,
-                    codec='libx264',
-                    audio_codec='aac',
-                    threads=min(os.cpu_count() or 4, 8),
-                    preset='faster',
-                    ffmpeg_params=['-crf', '24', '-pix_fmt', 'yuv420p'],
-                    logger=None,
-                )
+                # Create list of input video segments from folders
+                concat_file_path = os.path.join(temp_dir, 'inputs.txt')
+                with open(concat_file_path, 'w') as f:
+                    for i in range(len(image_files)):
+                        img_dir = os.path.normpath(os.path.join(temp_dir, f"img_{i}"))
+                        f.write(f"file '{img_dir}/%06d.jpg'\n")
+
+                # Generate intermediate videos per segment
+                segment_paths = []
+                for i in range(len(image_files)):
+                    img_dir = os.path.normpath(os.path.join(temp_dir, f"img_{i}"))
+                    segment_path = os.path.normpath(os.path.join(temp_dir, f"segment_{i}.mp4"))
+                    cmd = [
+                        ffmpeg_path,
+                        '-y',
+                        '-framerate', str(fps),
+                        '-i', f"{img_dir}/%06d.jpg",
+                        '-c:v', 'libx264',
+                        '-preset', 'ultrafast',
+                        '-crf', '28',
+                        '-pix_fmt', 'yuv420p',
+                        segment_path
+                    ]
+                    try:
+                        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                        logger.info(f"FFmpeg output: {result.stdout}")
+                    except subprocess.CalledProcessError as e:
+                        logger.error(f"FFmpeg failed: {e.stderr}")
+                        raise Exception(f"FFmpeg failed: {e.stderr}")
+                    segment_paths.append(segment_path)
+
+                # Concatenate segments
+                concat_list_path = os.path.normpath(os.path.join(temp_dir, 'concat_list.txt'))
+                with open(concat_list_path, 'w') as f:
+                    for segment_path in segment_paths:
+                        f.write(f"file '{os.path.normpath(segment_path)}'\n")
+
+                video_no_audio_path = os.path.normpath(os.path.join(temp_dir, 'video_no_audio.mp4'))
+                cmd_concat = [
+                    ffmpeg_path,
+                    '-y',
+                    '-f', 'concat',
+                    '-safe', '0',
+                    '-i', concat_list_path,
+                    '-c', 'copy',
+                    video_no_audio_path
+                ]
+                try:
+                    result = subprocess.run(cmd_concat, capture_output=True, text=True, check=True)
+                    logger.info(f"FFmpeg concat output: {result.stdout}")
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"FFmpeg concat failed: {e.stderr}")
+                    raise Exception(f"FFmpeg concat failed: {e.stderr}")
+
+                # Combine audio
+                if audio_clips:
+                    all_audio_path = os.path.normpath(os.path.join(temp_dir, 'final_audio.mp3'))
+                    audio_inputs = []
+                    filter_complex = []
+                    for i in range(len(audio_files)):
+                        audio_path = os.path.normpath(os.path.join(temp_dir, f"audio_{i}.mp3"))
+                        audio_inputs += ['-i', audio_path]
+                        filter_complex.append(f'[{i}:a]')
+
+                    cmd_audio = [
+                        ffmpeg_path, '-y',
+                        *audio_inputs,
+                        '-filter_complex', f"{''.join(filter_complex)}concat=n={len(audio_files)}:v=0:a=1[outa]",
+                        '-map', '[outa]',
+                        all_audio_path
+                    ]
+                    logger.info(f"Running FFmpeg audio command: {' '.join(cmd_audio)}")
+                    try:
+                        result = subprocess.run(cmd_audio, capture_output=True, text=True, check=True)
+                        logger.info(f"FFmpeg audio output: {result.stdout}")
+                    except subprocess.CalledProcessError as e:
+                        logger.error(f"FFmpeg audio failed: {e.stderr}")
+                        raise Exception(f"FFmpeg audio failed: {e.stderr}")
+
+                    # Merge video + audio
+                    final_output_path = os.path.normpath(os.path.join(temp_dir, 'output.mp4'))
+                    cmd_merge = [
+                        ffmpeg_path, '-y',
+                        '-i', video_no_audio_path,
+                        '-i', all_audio_path,
+                        '-c:v', 'copy',
+                        '-c:a', 'aac',
+                        '-shortest',
+                        final_output_path
+                    ]
+                    logger.info(f"Running FFmpeg merge command: {' '.join(cmd_merge)}")
+                    try:
+                        result = subprocess.run(cmd_merge, capture_output=True, text=True, check=True)
+                        logger.info(f"FFmpeg merge output: {result.stdout}")
+                    except subprocess.CalledProcessError as e:
+                        logger.error(f"FFmpeg merge failed: {e.stderr}")
+                        raise Exception(f"FFmpeg merge failed: {e.stderr}")
+                    output_path = final_output_path
+                else:
+                    final_output_path = video_no_audio_path
+                    output_path = final_output_path
+
             except Exception as e:
                 logger.error(f"Failed to write video: {str(e)}")
                 return JsonResponse({'error': f'Video rendering failed: {str(e)}'}, status=500)
@@ -521,7 +626,6 @@ def create_video_from_images(request):
         logger.error(f"Video generation error: {str(e)}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
     finally:
-        # Ensure any remaining MoviePy resources are closed
         if 'clips' in locals():
             for clip in clips:
                 clip.close()

@@ -28,6 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-@#0=um2#itgo2fefn#vs$h#2i2bzkj(h3u7&jfc-yjaw13$ya@'
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+ELEVEN_LABS_API_KEY = os.getenv("ELEVEN_LABS_API_KEY")
 
 # OAUTH CONFIGURATION
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
